@@ -16,7 +16,7 @@ Route::view('profile', 'profile')
 
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Volt::route('/permohonan/baru', 'application-form')->name('application.create');
+    Route::view('/permohonan/baru', 'pages.permohonan-baru')->name('application.create');
 });
 
 require __DIR__.'/auth.php';

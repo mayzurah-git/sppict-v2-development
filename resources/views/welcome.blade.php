@@ -25,10 +25,10 @@
 
             <!-- Logo & Nama Kerajaan Negeri Sembilan -->
             <div class="relative z-10 flex items-center space-x-3">
-                <img src="https://www.ns.gov.my/images/logo_ns.png" alt="Jata Negeri Sembilan" class="h-12 w-auto drop-shadow-md" onError="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Coat_of_arms_of_Negeri_Sembilan.svg/1200px-Coat_of_arms_of_Negeri_Sembilan.svg.png'">
+                <img src="{{ asset('images/logo-jata-n9.png') }}" alt="Jata Negeri Sembilan" class="h-16 w-auto drop-shadow-md" />
                 <div>
-                    <span class="block text-xs uppercase tracking-widest text-amber-400 font-bold">Kerajaan Negeri Sembilan</span>
-                    <span class="text-sm font-semibold text-blue-200">Setiausaha Kerajaan Negeri Sembilan</span>
+                    <span class="block text-xs uppercase tracking-widest text-amber-400 font-bold">Bahagian Teknologi Maklumat</span>
+                    <span class="text-sm font-semibold text-blue-200">Pejabat Setiausaha Kerajaan Negeri Sembilan (PSUKNS)</span>
                 </div>
             </div>
 

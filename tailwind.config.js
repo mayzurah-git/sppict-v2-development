@@ -5,8 +5,11 @@ import forms from '@tailwindcss/forms';
 export default {
     content: [
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
+        './vendor/laravel/jetstream/**/*.blade.php',
+        './vendor/livewire/livewire/src/Livewire/features/SupportFileUploads/TemporaryUploadedFile.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
+        './app/Livewire/**/*.php',
     ],
 
     theme: {
