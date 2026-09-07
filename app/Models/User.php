@@ -4,19 +4,21 @@ namespace App\Models;
 
 // 1. Import Trait HasRoles dari Spatie & HasUuids / SoftDeletes
 use Spatie\Permission\Traits\HasRoles;
+use Spatie\Permission\Models\Role;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
     
     // 2. Masukkan HasRoles, HasUuids & SoftDeletes di sini
-    use HasRoles, HasUuids, SoftDeletes;
+    use  HasUuids, SoftDeletes;
 
     /**
      * Tentukan kolum UUID untuk HasUuids
@@ -34,6 +36,7 @@ class User extends Authenticatable
     protected $fillable = [
         'uuid',
         'agency_id',
+        'role_id',
         'name',
         'email',
         'position',
@@ -75,4 +78,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(Application::class, 'applicant_id');
     }
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class);
+    }
+
 }

@@ -119,7 +119,7 @@ class RolesAndPermissionsSeeder extends Seeder
             [
                 'uuid' => (string) Str::uuid(),
                 'name' => 'Bahagian Teknologi Maklumat (BTM)',
-                'category' => 'Agensi Negeri',
+                'category' => 'SUK',
                 'is_active' => true,
             ]
         );
@@ -129,7 +129,7 @@ class RolesAndPermissionsSeeder extends Seeder
             [
                 'uuid' => (string) Str::uuid(),
                 'name' => 'Jabatan Kerja Raya Negeri Sembilan',
-                'category' => 'Agensi Negeri',
+                'category' => 'STATE_DEPT',
                 'is_active' => true,
             ]
         );

@@ -10,7 +10,7 @@ class ApplicationForm extends Form
     // --- FASA 1: MAKLUMAT AM PROJEK ---
     public string $title = '';
     public string $project_category = 'System Development';
-    public string $description = '';
+    //public string $description = '';
     public string $objectives = '';
     public string $project_scope = '';
 

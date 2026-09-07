@@ -7,10 +7,10 @@
     <x-form.input label="Tajuk Permohonan Projek" wire:model="form.title" :error="$errors->first('form.title')" required placeholder="Contoh: Naik Naik Taraf Infrastruktur Rangkaian Agensi" />
 
     <x-form.select label="Kategori Projek" wire:model="form.project_category" :error="$errors->first('form.project_category')" required>
-        <option value="System Development">Pembangunan Sistem / Aplikasi</option>
-        <option value="Hardware Procurement">Perolehan Perkakasan / Komputer</option>
-        <option value="Network & Security">Rangkaian & Keselamatan Siber</option>
-        <option value="ICT Maintenance">Penyelenggaraan / Lesen ICT</option>
+        <option value="Pembangunan Sistem">Pembangunan Sistem / Aplikasi</option>
+        <option value="Perolehan Perkakasan">Perolehan Perkakasan / Komputer</option>
+        <option value="Rangkaian dan Keselamatan Siber">Rangkaian & Keselamatan Siber</option>
+        <option value="Penyelenggaraan dan Lesen ICT">Penyelenggaraan / Lesen ICT</option>
     </x-form.select>
 
     <div>

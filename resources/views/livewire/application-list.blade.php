@@ -7,6 +7,7 @@
         <div class="w-full md:w-1/4">
             <select wire:model.live="statusFilter" class="w-full text-xs border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 <option value="">-- Semua Status --</option>
+                <option value="DRAFT">Draf</option>
                 <option value="SUBMITTED">Dihantar</option>
                 <option value="IN_REVIEW">Dalam Semakan</option>
                 <option value="AMENDMENT_REQUIRED">Pembetulan</option>
@@ -27,7 +28,8 @@
                         <th class="p-3.5">Kategori</th>
                         <th class="p-3.5 text-right">Anggaran Kos (RM)</th>
                         <th class="p-3.5 text-center">Status</th>
-                        <th class="p-3.5 text-center">Tarikh Hantar</th>
+                        <th class="p-3.5 text-center">Tarikh Kemaskini</th>
+                        <th class="p-3.5 text-center">Tindakan</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -47,11 +49,14 @@
                             </td>
                             <td class="p-3.5 text-center">
                                 @switch($app->status)
+                                    @case('DRAFT')
+                                        <span class="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">Draf</span>
+                                        @break
                                     @case('SUBMITTED')
                                         <span class="px-2.5 py-1 bg-blue-100 text-blue-800 font-bold rounded-full text-[10px]">Dihantar</span>
                                         @break
                                     @case('IN_REVIEW')
-                                        <span class="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">Dalam Semakan</span>
+                                        <span class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-full text-[10px]">Dalam Semakan</span>
                                         @break
                                     @case('AMENDMENT_REQUIRED')
                                         <span class="px-2.5 py-1 bg-purple-100 text-purple-800 font-bold rounded-full text-[10px]">Perlu Pembetulan</span>
@@ -67,12 +72,25 @@
                                 @endswitch
                             </td>
                             <td class="p-3.5 text-center text-slate-500">
-                                {{ $app->created_at ? $app->created_at->format('d/m/Y H:i') : '-' }}
+                                {{ $app->updated_at ? $app->updated_at->format('d/m/Y H:i') : '-' }}
+                            </td>
+                            <td class="p-3.5 text-center whitespace-nowrap">
+                                @if ($app->status === 'DRAFT')
+                                    <a href="{{ route('application.edit', $app->uuid) }}" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs shadow-sm transition inline-flex items-center space-x-1">
+                                        <span>✏️</span>
+                                        <span>Kemaskini</span>
+                                    </a>
+                                @else
+                                    <a href="{{ route('application.view', $app->uuid) }}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition inline-flex items-center space-x-1">
+                                        <span>👁️</span>
+                                        <span>Papar</span>
+                                    </a>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="p-8 text-center text-slate-400">
+                            <td colspan="7" class="p-8 text-center text-slate-400">
                                 Tiada rekod permohonan dijumpai.
                             </td>
                         </tr>

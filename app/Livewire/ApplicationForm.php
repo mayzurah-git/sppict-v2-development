@@ -3,12 +3,15 @@
 namespace App\Livewire;
 
 use Livewire\Component;
+use App\Models\Application;
 use Livewire\WithFileUploads;
 use App\Livewire\Forms\ApplicationForm as ApplicationFormObject;
 use App\Services\ApplicationSubmissionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\Layout;
 
+#[Layout('layouts.app')]
 class ApplicationForm extends Component
 {
     use WithFileUploads;
@@ -19,19 +22,76 @@ class ApplicationForm extends Component
     // Tracker Fasa
     public int $currentStep = 1;
 
-    public function mount()
+    public function mount(?string $uuid = null)
     {
         $user = Auth::user();
-        if ($user) {
-            $this->form->officer_name = $user->name ?? '';
-            $this->form->officer_position = $user->position ?? '';
-            $this->form->officer_email = $user->email ?? '';
-            $this->form->officer_phone = $user->phone_number ?? '';
-        }
 
-        // Sediakan Kategori & Item Asas Fasa 3 jika belum ada
-        if (empty($this->form->details)) {
-            $this->addCategoryGroup();
+        // Jika ada UUID (Edit Draf)
+        if ($uuid) {
+            $application = Application::with(['details', 'documents'])
+                ->where('applicant_id', $user->id)
+                ->where('uuid', $uuid)
+                ->firstOrFail();
+            
+            $this->applicationId = $application->id;
+
+            // Isikan semula data ke Form Object
+            $this->form->title = $application->title ?? '';
+            $this->form->project_category = $application->project_category ?? 'System Development';
+            $this->form->objectives = $application->objectives ?? '';
+            $this->form->project_scope = $application->project_scope ?? '';
+            
+            $this->form->procurement_type = $application->procurement_type ?? '';
+            $this->form->procurement_method = $application->procurement_method ?? '';
+            $this->form->ceiling_cost = $application->ceiling_cost;
+            $this->form->estimated_cost = $application->estimated_cost;
+            $this->form->expected_duration_months = $application->expected_duration_months;
+            $this->form->outcome_code = $application->outcome_code ?? '';
+
+            $this->form->officer_name = $application->primary_officer_name ?? '';
+            $this->form->officer_position = $application->primary_officer_position ?? '';
+            $this->form->officer_email = $application->primary_officer_email ?? '';
+            $this->form->officer_phone = $application->primary_officer_phone ?? '';
+
+            if ($application->secondary_officer_name) {
+                $this->form->has_secondary_officer = true;
+                $this->form->secondary_officer_name = $application->secondary_officer_name;
+                $this->form->secondary_officer_position = $application->secondary_officer_position;
+                $this->form->secondary_officer_email = $application->secondary_officer_email;
+                $this->form->secondary_officer_phone = $application->secondary_officer_phone;
+            }
+
+            // Reconstruct Item Details (Fasa 3)
+            if ($application->details->count() > 0) {
+                $groupedDetails = [];
+                foreach ($application->details->groupBy('item_category') as $category => $items) {
+                    $itemList = [];
+                    foreach ($items as $item) {
+                        $itemList[] = [
+                            'technical_specifications' => $item->technical_specifications,
+                            'unit_quantity' => $item->unit_quantity,
+                            'unit_cost' => $item->unit_cost,
+                        ];
+                    }
+                    $groupedDetails[] = [
+                        'item_category' => $category,
+                        'items' => $itemList
+                    ];
+                }
+                $this->form->details = $groupedDetails;
+            }
+        } else {
+            // Permohonan Baharu
+            if ($user) {
+                $this->form->officer_name = $user->name ?? '';
+                $this->form->officer_position = $user->position ?? '';
+                $this->form->officer_email = $user->email ?? '';
+                $this->form->officer_phone = $user->phone_number ?? '';
+            }
+
+            if (empty($this->form->details)) {
+                $this->addCategoryGroup();
+            }
         }
     }
 
@@ -128,8 +188,25 @@ class ApplicationForm extends Component
         }
     }
 
+    public ?int $applicationId = null; // Menyimpan ID jika draf sedia ada diisikan semula
+
+    public function saveDraft(ApplicationSubmissionService $service)
+    {
+        try {
+            $user = Auth::user();
+            $application = $service->saveDraft($this->form, $user, $this->applicationId);
+            $this->applicationId = $application->id;
+
+            session()->flash('message', "Draf permohonan berjaya disimpan ({$application->reference_number})!");
+        } catch (\Exception $e) {
+            Log::error('Ralat Simpan Draf: ' . $e->getMessage());
+            session()->flash('error', 'Gagal menyimpan draf: ' . $e->getMessage());
+        }
+    }
+
     public function render()
     {
         return view('livewire.application-form');
+            
     }
 }

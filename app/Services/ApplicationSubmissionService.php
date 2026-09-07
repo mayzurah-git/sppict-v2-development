@@ -36,7 +36,7 @@ class ApplicationSubmissionService
                 'applicant_id' => $user->id,
                 'title' => $form->title,
                 'project_category' => $form->project_category,
-                'description' => $form->description,
+                //'description' => $form->description,
                 'objectives' => $form->objectives,
                 'project_scope' => $form->project_scope,
                 'procurement_type' => $form->procurement_type,
@@ -104,6 +104,78 @@ class ApplicationSubmissionService
             }
 
             Log::info("Permohonan baru berjaya dihantar: {$refNo} oleh ID Pemohon {$user->id}");
+
+            return $application;
+        });
+    }
+    /**
+    * Menyimpan atau mengemas kini permohonan sebagai DRAF.
+    */
+    public function saveDraft(ApplicationForm $form, $user, ?int $applicationId = null): Application
+    {
+        return DB::transaction(function () use ($form, $user, $applicationId) {
+            $year = date('Y');
+
+            if ($applicationId) {
+                $application = Application::findOrFail($applicationId);
+            } else {
+                $count = Application::whereYear('created_at', $year)->count() + 1;
+                $refNo = sprintf('SPPICT/%s/DRAFT-%04d', $year, $count);
+
+                $application = new Application([
+                    'uuid' => (string) Str::uuid(),
+                    'reference_number' => $refNo,
+                    'agency_id' => $user->agency_id ?? 1,
+                    'applicant_id' => $user->id,
+                ]);
+            }
+
+            // Kemaskini medan (boleh jadi kosong semasa draf)
+            $application->fill([
+                'title' => $form->title ?: 'Permohonan Tanpa Tajuk (Draf)',
+                'project_category' => $form->project_category,
+                // 'description' => $form->description,
+                'objectives' => $form->objectives,
+                'project_scope' => $form->project_scope,
+                'procurement_type' => $form->procurement_type,
+                'procurement_method' => $form->procurement_method,
+                'ceiling_cost' => $form->ceiling_cost ?: 0,
+                'estimated_cost' => $form->estimated_cost ?: 0,
+                'expected_duration_months' => $form->expected_duration_months ?: 1,
+                'outcome_code' => $form->outcome_code ?? '',
+                'status' => 'DRAFT',
+                'primary_officer_name' => $form->officer_name,
+                'primary_officer_position' => $form->officer_position,
+                'primary_officer_email' => $form->officer_email,
+                'primary_officer_phone' => $form->officer_phone,
+                'secondary_officer_name' => $form->has_secondary_officer ? $form->secondary_officer_name : null,
+                'secondary_officer_position' => $form->has_secondary_officer ? $form->secondary_officer_position : null,
+                'secondary_officer_email' => $form->has_secondary_officer ? $form->secondary_officer_email : null,
+                'secondary_officer_phone' => $form->has_secondary_officer ? $form->secondary_officer_phone : null,
+            ]);
+
+            $application->save();
+
+            // Simpan Perincian Projek jika ada
+            if (!empty($form->details)) {
+                $application->details()->delete(); // Padam perincian lama sebelum simpan semula
+                foreach ($form->details as $group) {
+                    $categoryName = $group['item_category'] ?? 'Projek Baharu';
+                    foreach ($group['items'] ?? [] as $item) {
+                        if (!empty($item['technical_specifications'])) {
+                            ApplicationDetail::create([
+                                'uuid' => (string) Str::uuid(),
+                                'application_id' => $application->id,
+                                'item_category' => $categoryName,
+                                'technical_specifications' => strip_tags($item['technical_specifications']),
+                                'unit_quantity' => (int) ($item['unit_quantity'] ?? 1),
+                                'unit_cost' => (float) ($item['unit_cost'] ?? 0),
+                                'total_cost' => ((int) ($item['unit_quantity'] ?? 1)) * ((float) ($item['unit_cost'] ?? 0)),
+                            ]);
+                        }
+                    }
+                }
+            }
 
             return $application;
         });
