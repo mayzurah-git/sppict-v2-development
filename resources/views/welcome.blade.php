@@ -17,7 +17,7 @@
     <div class="min-h-screen flex flex-col md:flex-row">
         
         <!-- SEKSYEN KIRI: BRANDING & IDENTITI SPPICT V2 -->
-        <div class="w-full md:w-1/2 bg-gradient-to-br from-indigo-950 via-blue-900 to-indigo-900 p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden text-white min-h-[400px] md:min-h-screen">
+        <div class="w-full md:w-1/2 bg-gradient-to-br from-green-950 via-blue-900 to-green-900 p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden text-white min-h-[400px] md:min-h-screen">
             
             <!-- Hiasan Bulatan Gradient Latar Belakang -->
             <div class="absolute -top-24 -left-24 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>

@@ -16,6 +16,12 @@
         </div>
     @endif
 
+    @if (session()->has('warning'))
+        <div class="p-4 bg-amber-50 border-l-4 border-amber-500 text-amber-800 text-xs rounded-r-xl">
+            ⚠ {{ session('warning') }}
+        </div>
+    @endif
+
     <!-- Carian, Tapis & Jadual -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden space-y-4 p-4">
         <div class="flex flex-col md:flex-row gap-3">

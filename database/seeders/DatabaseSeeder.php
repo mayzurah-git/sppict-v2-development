@@ -16,5 +16,12 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RolesAndPermissionsSeeder::class);
+        $this->call(MeetingMasterDataSeeder::class);
+        $this->call(ApplicationMasterDataSeeder::class);
+
+        // Data contoh pembangunan sahaja (Mesyuarat JTICT yang dibuka)
+        if (app()->isLocal()) {
+            $this->call(MeetingSeeder::class);
+        }
     }
 }

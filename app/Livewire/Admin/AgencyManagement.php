@@ -26,6 +26,11 @@ class AgencyManagement extends Component
     public string $code = '';
     public string $category = 'SUK';
 
+    public function mount(): void
+    {
+        $this->ensureUrusSetia();
+    }
+
     protected function rules()
     {
         return [
@@ -37,6 +42,7 @@ class AgencyManagement extends Component
 
     public function openModal(?int $id = null)
     {
+        $this->ensureUrusSetia();
         $this->resetErrorBag();
         $this->agencyId = $id;
 
@@ -65,6 +71,7 @@ class AgencyManagement extends Component
 
     public function saveAgency()
     {
+        $this->ensureUrusSetia();
         $this->validate();
 
         Agency::updateOrCreate(
@@ -82,6 +89,7 @@ class AgencyManagement extends Component
 
     public function deleteAgency(string $uuid): void
     {
+        $this->ensureUrusSetia();
         $agency = Agency::where('uuid', $uuid)->firstOrFail();
         $agency->delete();
 
@@ -98,5 +106,10 @@ class AgencyManagement extends Component
         return view('livewire.admin.agency-management', [
             'agencies' => $agencies
         ])->layout('layouts.app');
+    }
+
+    protected function ensureUrusSetia(): void
+    {
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
     }
 }

@@ -65,7 +65,9 @@
                     Seterusnya →
                 </button>
             @else
-                <button type="button" wire:click="submitApplication" wire:loading.attr="disabled" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-md transition flex items-center space-x-2 disabled:opacity-50">
+                <button type="button" wire:click="submitApplication" wire:loading.attr="disabled" @disabled(! $this->targetMeeting)
+                        title="{{ $this->targetMeeting ? 'Hantar ke ' . $this->targetMeeting->label() : 'Tiada Mesyuarat JTICT yang dibuka. Sila simpan sebagai draf.' }}"
+                        class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-md transition flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600">
                     <span wire:loading.remove wire:target="submitApplication">🚀 Hantar Permohonan Projek</span>
                     <span wire:loading wire:target="submitApplication">Sedang Memproses...</span>
                 </button>

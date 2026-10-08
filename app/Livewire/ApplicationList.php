@@ -27,15 +27,26 @@ class ApplicationList extends Component
     public function render()
     {
         $user = Auth::user();
+        $isUrusSetia = $user->hasRole('pentadbir_urus_setia');
 
-        $applications = Application::where('applicant_id', $user->id)
+        $applications = Application::query()
+            ->with('applicationCategoryMaster')
+            ->when($isUrusSetia, function ($query) {
+                $query->where('status', 'SUBMITTED');
+            }, function ($query) use ($user) {
+                // Permohonan sendiri, atau projek yang dipertanggungjawabkan (termasuk yang diambil alih)
+                $query->where(function ($q) use ($user) {
+                    $q->where('applicant_id', $user->id)
+                      ->orWhereHas('officers', fn ($officer) => $officer->active()->where('user_id', $user->id));
+                });
+            })
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {
                     $q->where('reference_number', 'like', '%' . $this->search . '%')
                       ->orWhere('title', 'like', '%' . $this->search . '%');
                 });
             })
-            ->when($this->statusFilter, function ($query) {
+            ->when($this->statusFilter && ! $isUrusSetia, function ($query) {
                 $query->where('status', $this->statusFilter);
             })
             ->latest()

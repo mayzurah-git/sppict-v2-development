@@ -96,6 +96,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage-mid-term-review',
             'generate-reports',
             'print-approval-certificate',
+            'manage-agencies',
             'manage-users',
         ]);
 
@@ -153,7 +154,7 @@ class RolesAndPermissionsSeeder extends Seeder
             [
                 'uuid' => (string) Str::uuid(),
                 'agency_id' => $agencyBTM->id,
-                'name' => 'Urus Setia MKK BTM',
+                'name' => 'Urus Setia',
                 'position' => 'Penolong Pegawai Teknologi Maklumat (FA32)',
                 'phone_number' => '06-7658888',
                 'password' => Hash::make('Password123!'),

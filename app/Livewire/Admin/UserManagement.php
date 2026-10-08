@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\User;
 use App\Models\Agency;
+use App\Models\Application;
 use Illuminate\Support\Facades\Hash;
 
 class UserManagement extends Component
@@ -83,10 +84,26 @@ class UserManagement extends Component
             $data['password'] = Hash::make($this->password);
         }
 
+        $previousAgencyId = $this->userId ? User::whereKey($this->userId)->value('agency_id') : null;
+
         $user = User::updateOrCreate(['id' => $this->userId], $data);
         $user->syncRoles($this->role);
 
         session()->flash('message', $this->userId ? 'Pengguna berjaya dikemaskini!' : 'Pengguna baharu berjaya didaftarkan!');
+
+        // Pengguna bertukar agensi tetapi masih Pegawai Bertanggungjawab aktif: maklumkan supaya pegawai baharu dilantik
+        if ($this->userId && (int) $previousAgencyId !== (int) $user->agency_id) {
+            $references = $user->officerAssignments()->active()
+                ->whereHas('application', fn ($query) => $query->whereNotIn('status', Application::EDITABLE_STATUSES))
+                ->with('application:id,reference_number')
+                ->get()
+                ->pluck('application.reference_number');
+
+            if ($references->isNotEmpty()) {
+                session()->flash('warning', "{$user->name} masih Pegawai Bertanggungjawab bagi {$references->count()} permohonan/projek ({$references->implode(', ')}). "
+                    . 'Pegawai ini tidak lagi boleh mengisi kemajuan projek tersebut; sila maklumkan agensi berkenaan atau Urus Setia untuk melantik pegawai baharu.');
+            }
+        }
         $this->closeModal();
     }
 

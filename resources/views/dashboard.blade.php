@@ -13,7 +13,7 @@
                     <div>
                         <p class="text-xs font-bold tracking-[0.2em] text-indigo-200 uppercase">SPPICT v2</p>
                         <h2 class="mt-2 text-2xl font-black">Dashboard Induk</h2>
-                        <p class="text-sm text-slate-300 mt-1">Kawalan data master, pengguna, peranan dan pemantauan keseluruhan sistem.</p>
+                        <p class="text-sm text-slate-300 mt-1">Kawalan data asas, pengguna, peranan dan pemantauan keseluruhan sistem.</p>
                     </div>
                     <span class="self-start px-3 py-1 bg-white/10 border border-white/20 text-xs font-bold rounded-full">Akses Superadmin</span>
                 </div>
@@ -31,9 +31,6 @@
                 <section>
                     <h3 class="text-sm font-black uppercase tracking-wider text-slate-600 mb-3">Modul Pentadbiran</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <a href="{{ route('admin.agencies') }}" class="p-6 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-blue-500 transition group">
-                            <div class="w-10 h-10 mb-4 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-black">A</div><h4 class="text-base font-bold text-slate-800 group-hover:text-blue-600">Pengurusan Agensi</h4><p class="text-xs text-slate-500 mt-1">Urus senarai dan kod agensi kerajaan berdaftar.</p>
-                        </a>
                         <a href="{{ route('admin.users') }}" class="p-6 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-blue-500 transition group">
                             <div class="w-10 h-10 mb-4 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center font-black">U</div><h4 class="text-base font-bold text-slate-800 group-hover:text-blue-600">Pengguna & Peranan</h4><p class="text-xs text-slate-500 mt-1">Urus akaun, peranan capaian, dan kata laluan.</p>
                         </a>
@@ -46,10 +43,43 @@
                     </div>
                 </section>
             @else
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <div><h2 class="text-2xl font-black text-slate-900 tracking-tight">Portal Permohonan SPPICT v2</h2><p class="text-xs text-slate-500 mt-1">Pemantauan dan status permohonan kelulusan projek ICT agensi anda.</p></div>
-                    <a href="{{ url('/application/new') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition hover:scale-105"><span class="mr-1.5 text-base">+</span> Permohonan Projek Baharu</a>
-                </div>
+                @hasrole('pentadbir_urus_setia')
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-bold tracking-[0.2em] text-blue-600 uppercase">SPPICT v2</p>
+                            <h2 class="mt-2 text-2xl font-black text-slate-900 tracking-tight">Semakan Permohonan Projek</h2>
+                            <p class="text-xs text-slate-500 mt-1">Senarai permohonan projek yang telah dihantar untuk semakan Urus Setia.</p>
+                        </div>
+                        <a href="{{ route('admin.agencies') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition">
+                            Pengurusan Agensi
+                        </a>
+                    </div>
+
+                    @php($needsOfficer = \App\Models\Application::needsOfficerReassignment()->with('agency')->latest()->get())
+                    @if ($needsOfficer->isNotEmpty())
+                        <div class="bg-amber-50 border border-amber-200 p-5 rounded-2xl space-y-3">
+                            <div>
+                                <h3 class="text-sm font-black text-amber-800">⚠ Permohonan/Projek Tanpa Pegawai Utama Aktif ({{ $needsOfficer->count() }})</h3>
+                                <p class="text-xs text-amber-700 mt-0.5">Pegawai Utama telah bertukar keluar agensi, akaunnya dipadam, atau belum dilantik. Sila lantik pegawai baharu.</p>
+                            </div>
+                            <ul class="divide-y divide-amber-100 text-xs">
+                                @foreach ($needsOfficer as $app)
+                                    <li class="py-2 flex items-center justify-between gap-3">
+                                        <span><span class="font-bold text-slate-800">{{ $app->reference_number }}</span> – {{ $app->title }} <span class="text-slate-500">({{ $app->agency?->code }})</span></span>
+                                        <a href="{{ route('application.view', $app->uuid) }}" class="shrink-0 px-3 py-1 bg-white border border-amber-300 text-amber-800 font-bold rounded-lg hover:bg-amber-100 transition">Lantik Pegawai</a>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                @else
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <div><h2 class="text-2xl font-black text-slate-900 tracking-tight">Sistem Permohonan Projek ICT (SPPICT) v2</h2><p class="text-xs text-slate-500 mt-1">Sistem Permohonan dan Pemantauan Projek ICT.</p></div>
+                        <a href="{{ url('/application/new') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition hover:scale-105"><span class="mr-1.5 text-base">+</span> Permohonan Baharu</a>
+                    </div>
+
+                    @include('livewire.partials.jtict-status', ['meeting' => \App\Models\Meeting::currentJtict()])
+                @endhasrole
                 <livewire:application-list />
             @endhasrole
         </div>

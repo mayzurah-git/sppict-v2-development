@@ -22,6 +22,8 @@ class ProjectProgressReport extends Model implements Auditable
         'project_id',
         'report_year',
         'report_month',
+        'submitted_by',
+        'application_officer_id',
         'physical_actual',
         'physical_planned',
         'financial_actual',
@@ -47,6 +49,19 @@ class ProjectProgressReport extends Model implements Auditable
     public function project()
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function submitter()
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    /**
+     * Tempoh tugasan pegawai semasa laporan dihantar (kekal walaupun pegawai bertukar).
+     */
+    public function officerAssignment()
+    {
+        return $this->belongsTo(ApplicationOfficer::class, 'application_officer_id');
     }
 
     public function verifier()

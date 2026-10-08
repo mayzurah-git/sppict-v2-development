@@ -1,21 +1,22 @@
 <div class="space-y-6" wire:key="phase-2-form">
     <div class="border-b pb-2">
-        <h3 class="text-lg font-semibold text-gray-700">Fasa 2: Maklumat Kewangan & Perolehan</h3>
+        <h3 class="text-lg font-semibold text-gray-700">Maklumat Peruntukan & Perolehan</h3>
         <p class="text-xs text-gray-500">Nyatakan anggaran kos, jenis perolehan, dan tempoh pelaksanaan projek.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <x-form.select label="Jenis Perolehan" wire:model="form.procurement_type" :error="$errors->first('form.procurement_type')" required>
-            <option value="Pembekalan / Perkhidmatan Tidak Bermasa (One-Off)">Pembekalan / Perkhidmatan Tidak Bermasa (One-Off)</option>
-            <option value="Pembekalan / Perkhidmatan Bermasa">Pembekalan / Perkhidmatan Bermasa</option>
-            <option value="Penyelenggaraan">Penyelenggaraan</option>
-            <option value="Pembangunan Aplikasi">Pembangunan Aplikasi</option>
+        <x-form.select label="Jenis Perolehan" wire:model="form.procurement_type_id" :error="$errors->first('form.procurement_type_id')" required>
+            <option value="" disabled>Pilih jenis perolehan</option>
+            @foreach ($this->procurementTypeOptions as $option)
+                <option value="{{ $option->id }}">{{ $option->name . (! $option->is_active || $option->trashed() ? ' (Tidak Aktif)' : '') }}</option>
+            @endforeach
         </x-form.select>
 
-        <x-form.select label="Kaedah Perolehan" wire:model="form.procurement_method" :error="$errors->first('form.procurement_method')" required>
-            <option value="Sebut Harga">Sebut Harga</option>
-            <option value="Tender Terbuka">Tender Terbuka</option>
-            <option value="Rundingan Terus">Rundingan Terus</option>
+        <x-form.select label="Kaedah Perolehan" wire:model="form.procurement_method_id" :error="$errors->first('form.procurement_method_id')" required>
+            <option value="" disabled>Pilih kaedah perolehan</option>
+            @foreach ($this->procurementMethodOptions as $option)
+                <option value="{{ $option->id }}">{{ $option->name . (! $option->is_active || $option->trashed() ? ' (Tidak Aktif)' : '') }}</option>
+            @endforeach
         </x-form.select>
     </div>
 
@@ -25,5 +26,5 @@
         <x-form.input label="Tempoh Pelaksanaan (Bulan)" type="number" wire:model="form.expected_duration_months" :error="$errors->first('form.expected_duration_months')" required placeholder="Contoh: 12" />
     </div>
 
-    <x-form.input label="Kod Hasil / Punca Peruntukan" wire:model="form.outcome_code" :error="$errors->first('form.outcome_code')" required placeholder="Contoh: P11 / Peruntukan Pembangunan Negeri" />
+    <x-form.input label="Rujukan Kelulusan" wire:model="form.outcome_code" :error="$errors->first('form.outcome_code')" required placeholder="Contoh: Bajet Mengurus" />
 </div>

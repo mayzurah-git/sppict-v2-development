@@ -3,17 +3,21 @@
 namespace Tests\Feature;
 
 use App\Livewire\ApplicationForm;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Concerns\UsesApplicationMasterData;
 use Tests\TestCase;
 
 class ApplicationFormTest extends TestCase
 {
+    use RefreshDatabase, UsesApplicationMasterData;
+
     public function test_can_move_from_step_one_to_step_two_without_losing_form_data(): void
     {
         $component = Livewire::test(ApplicationForm::class);
 
         $component->set('form.title', 'Ujian Projek');
-        $component->set('form.project_category', 'System Development');
+        $component->set('form.application_category', 'pembangunan_sistem');
         $component->set('form.objectives', 'Objektif ujian untuk memastikan navigasi berfungsi.');
         $component->set('form.project_scope', 'Skop ujian untuk memastikan maklumat dikekalkan semasa navigasi.');
 

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Enums\OfficerRole;
 use OwenIt\Auditing\Contracts\Auditable;
 
 class Project extends Model implements Auditable
@@ -21,7 +22,6 @@ class Project extends Model implements Auditable
         'uuid',
         'application_id',
         'agency_id',
-        'project_manager_id',
         'contractor_name',
         'actual_cost',
         'start_date',
@@ -76,9 +76,14 @@ class Project extends Model implements Auditable
         return $this->belongsTo(Agency::class);
     }
 
-    public function projectManager()
+    /**
+     * Pegawai Utama aktif bagi projek ini (sumber: application_officers melalui permohonan).
+     */
+    public function responsibleOfficer()
     {
-        return $this->belongsTo(User::class, 'project_manager_id');
+        return $this->hasOne(ApplicationOfficer::class, 'application_id', 'application_id')
+            ->active()
+            ->role(OfficerRole::Primary);
     }
 
     public function progressReports()

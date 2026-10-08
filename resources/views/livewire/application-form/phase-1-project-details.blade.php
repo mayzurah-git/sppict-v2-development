@@ -1,16 +1,16 @@
 <div class="space-y-6" wire:key="phase-1-form">
     <div class="border-b pb-2">
-        <h3 class="text-lg font-semibold text-gray-700">Fasa 1: Maklumat Am Projek</h3>
+        <h3 class="text-lg font-semibold text-gray-700">Maklumat Am</h3>
         <p class="text-xs text-gray-500">Sila nyatakan maklumat asas permohonan projek ICT agensi anda.</p>
     </div>
 
-    <x-form.input label="Tajuk Permohonan Projek" wire:model="form.title" :error="$errors->first('form.title')" required placeholder="Contoh: Naik Naik Taraf Infrastruktur Rangkaian Agensi" />
+    <x-form.input label="Nama Projek" wire:model="form.title" :error="$errors->first('form.title')" required placeholder="Contoh: Naik Taraf Infrastruktur Rangkaian Agensi" />
 
-    <x-form.select label="Kategori Projek" wire:model="form.project_category" :error="$errors->first('form.project_category')" required>
-        <option value="Pembangunan Sistem">Pembangunan Sistem / Aplikasi</option>
-        <option value="Perolehan Perkakasan">Perolehan Perkakasan / Komputer</option>
-        <option value="Rangkaian dan Keselamatan Siber">Rangkaian & Keselamatan Siber</option>
-        <option value="Penyelenggaraan dan Lesen ICT">Penyelenggaraan / Lesen ICT</option>
+    <x-form.select label="Kategori Permohonan" wire:model="form.application_category" :error="$errors->first('form.application_category')" required>
+        <option value="" disabled>Pilih kategori permohonan</option>
+        @foreach ($this->applicationCategoryOptions as $option)
+            <option value="{{ $option->code }}">{{ $option->name . (! $option->is_active || $option->trashed() ? ' (Tidak Aktif)' : '') }}</option>
+        @endforeach
     </x-form.select>
 
     <div>
