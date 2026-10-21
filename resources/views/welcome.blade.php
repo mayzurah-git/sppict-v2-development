@@ -12,79 +12,27 @@
     <!-- Pemanggil Tailwind CSS & JS melalui Vite -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-sans antialiased text-slate-900 bg-slate-50">
+<body class="font-sans antialiased text-slate-900 bg-[#f8faf9]">
 
     <div class="min-h-screen flex flex-col md:flex-row">
-        
+
         <!-- SEKSYEN KIRI: BRANDING & IDENTITI SPPICT V2 -->
-        <div class="w-full md:w-1/2 bg-gradient-to-br from-green-950 via-blue-900 to-green-900 p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden text-white min-h-[400px] md:min-h-screen">
-            
-            <!-- Hiasan Bulatan Gradient Latar Belakang -->
-            <div class="absolute -top-24 -left-24 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -bottom-24 -right-24 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-            <!-- Logo & Nama Kerajaan Negeri Sembilan -->
-            <div class="relative z-10 flex items-center space-x-3">
-                <img src="{{ asset('images/logo-jata-n9.png') }}" alt="Jata Negeri Sembilan" class="h-16 w-auto drop-shadow-md" />
-                <div>
-                    <span class="block text-xs uppercase tracking-widest text-amber-400 font-bold">Bahagian Teknologi Maklumat</span>
-                    <span class="text-sm font-semibold text-blue-200">Pejabat Setiausaha Kerajaan Negeri Sembilan (PSUKNS)</span>
-                </div>
-            </div>
-
-            <!-- Tajuk Utama & Keterangan -->
-            <div class="relative z-10 my-auto py-10 space-y-6 max-w-lg">
-                <h1 class="text-4xl lg:text-5xl font-black tracking-tight leading-none text-white">
-                    SPPICT <span class="text-amber-400">v2</span>
-                </h1>
-                
-                <p class="text-blue-200/90 text-sm md:text-base leading-relaxed">
-                    Sistem Permohonan & Pemantauan Kelulusan Projek ICT Negeri Sembilan secara berpusat, efisien dan telus.
-                </p>
-
-                <!-- Kad Feature Highlight -->
-                <div class="space-y-3 pt-4">
-                    <div class="flex items-start space-x-3 bg-white/10 backdrop-blur-md p-3.5 rounded-xl border border-white/10 hover:bg-white/15 transition group">
-                        <div class="p-2 bg-amber-500/20 text-amber-400 rounded-lg group-hover:scale-110 transition">
-                            ⚡
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Permohonan Projek Berfasa</h4>
-                            <p class="text-xs text-blue-200/80 mt-0.5">Pengisian borang berfasa Fasa 1 hingga Fasa 5 dengan spesifikasi dinamik.</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-start space-x-3 bg-white/10 backdrop-blur-md p-3.5 rounded-xl border border-white/10 hover:bg-white/15 transition group">
-                        <div class="p-2 bg-blue-500/20 text-blue-300 rounded-lg group-hover:scale-110 transition">
-                            📊
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Pemantauan Kemajuan Real-Time</h4>
-                            <p class="text-xs text-blue-200/80 mt-0.5">Penjejakan status kelulusan mesyuarat dan laporan kemajuan fizikal & kewangan.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Footer Hak Cipta Kiri -->
-            <div class="relative z-10 text-xs text-blue-300/60 pt-6 border-t border-white/10 flex justify-between items-center">
-                <span>© 2026 Hak Cipta Terpelihara SUKNS</span>
-                <span class="text-[10px] bg-blue-900/80 px-2 py-1 rounded border border-blue-700/50">v2.0.4</span>
-            </div>
-        </div>
+        <x-brand-panel class="md:w-1/2 md:min-h-screen" />
 
         <!-- SEKSYEN KANAN: LIVEWIRE LOGIN COMPONENT -->
-        <div class="w-full md:w-1/2 flex items-center justify-center p-8 lg:p-16 bg-white">
-            <div class="w-full max-w-md space-y-8">
-                
+        <main class="flex-1 flex items-start md:items-center justify-center px-6 py-10 md:py-14">
+            <div class="w-full max-w-[420px]">
+
                 @auth
                     <!-- Paparan Jika Pengguna Sudah Log Masuk -->
-                    <div class="text-center space-y-4">
-                        <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Selamat Kembali!</h2>
-                        <p class="text-sm text-slate-500">Anda kini log masuk sebagai <strong class="text-blue-600">{{ Auth::user()->name }}</strong>.</p>
-                        
-                        <a href="{{ url('/dashboard') }}" class="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-600/30 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition">
-                            Teruskan Ke Dashboard Utama →
+                    <div class="flex flex-col gap-6">
+                        <div class="flex flex-col gap-2">
+                            <h2 class="text-3xl font-black tracking-tight text-slate-900">Selamat Kembali!</h2>
+                            <p class="text-base text-slate-600">Anda kini log masuk sebagai <strong class="text-slate-900">{{ Auth::user()->name }}</strong>.</p>
+                        </div>
+
+                        <a href="{{ url('/dashboard') }}" class="h-12 w-full flex items-center justify-center gap-2 rounded-[10px] bg-green-900 text-white text-[15px] font-bold transition hover:bg-green-800 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+                            Teruskan ke Papan Pemuka →
                         </a>
                     </div>
                 @else
@@ -93,7 +41,7 @@
                 @endauth
 
             </div>
-        </div>
+        </main>
 
     </div>
 

@@ -53,7 +53,8 @@ class ApplicationList extends Component
             ->paginate(10);
 
         return view('livewire.application-list', [
-            'applications' => $applications
+            'applications' => $applications,
+            'isUrusSetia' => $isUrusSetia,
         ]);
     }
 }

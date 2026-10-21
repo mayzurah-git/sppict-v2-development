@@ -17,6 +17,15 @@ export default {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
+            colors: {
+                // Identiti SPPICT: hijau gelap (panel/bar navigasi) dan latar halaman.
+                brand: {
+                    dark: '#0c2a1f',
+                    soft: '#d1e7dc',
+                    muted: '#b5d3c4',
+                    canvas: '#f4f6f5',
+                },
+            },
         },
     },
 

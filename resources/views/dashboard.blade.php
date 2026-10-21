@@ -1,5 +1,5 @@
 <x-app-layout>
-    <div class="py-8 bg-slate-50 min-h-screen">
+    <div class="py-8 bg-brand-canvas min-h-screen">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
             @hasrole('superadmin')
                 @php
@@ -44,34 +44,7 @@
                 </section>
             @else
                 @hasrole('pentadbir_urus_setia')
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <p class="text-xs font-bold tracking-[0.2em] text-blue-600 uppercase">SPPICT v2</p>
-                            <h2 class="mt-2 text-2xl font-black text-slate-900 tracking-tight">Semakan Permohonan Projek</h2>
-                            <p class="text-xs text-slate-500 mt-1">Senarai permohonan projek yang telah dihantar untuk semakan Urus Setia.</p>
-                        </div>
-                        <a href="{{ route('admin.agencies') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition">
-                            Pengurusan Agensi
-                        </a>
-                    </div>
-
-                    @php($needsOfficer = \App\Models\Application::needsOfficerReassignment()->with('agency')->latest()->get())
-                    @if ($needsOfficer->isNotEmpty())
-                        <div class="bg-amber-50 border border-amber-200 p-5 rounded-2xl space-y-3">
-                            <div>
-                                <h3 class="text-sm font-black text-amber-800">⚠ Permohonan/Projek Tanpa Pegawai Utama Aktif ({{ $needsOfficer->count() }})</h3>
-                                <p class="text-xs text-amber-700 mt-0.5">Pegawai Utama telah bertukar keluar agensi, akaunnya dipadam, atau belum dilantik. Sila lantik pegawai baharu.</p>
-                            </div>
-                            <ul class="divide-y divide-amber-100 text-xs">
-                                @foreach ($needsOfficer as $app)
-                                    <li class="py-2 flex items-center justify-between gap-3">
-                                        <span><span class="font-bold text-slate-800">{{ $app->reference_number }}</span> – {{ $app->title }} <span class="text-slate-500">({{ $app->agency?->code }})</span></span>
-                                        <a href="{{ route('application.view', $app->uuid) }}" class="shrink-0 px-3 py-1 bg-white border border-amber-300 text-amber-800 font-bold rounded-lg hover:bg-amber-100 transition">Lantik Pegawai</a>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
+                    @include('dashboard.urus-setia')
                 @else
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                         <div><h2 class="text-2xl font-black text-slate-900 tracking-tight">Sistem Permohonan Projek ICT (SPPICT) v2</h2><p class="text-xs text-slate-500 mt-1">Sistem Permohonan dan Pemantauan Projek ICT.</p></div>
@@ -81,8 +54,8 @@
                     </div>
 
                     @include('livewire.partials.jtict-status', ['meeting' => \App\Models\Meeting::currentJtict()])
+                    <livewire:application-list />
                 @endhasrole
-                <livewire:application-list />
             @endhasrole
         </div>
     </div>
