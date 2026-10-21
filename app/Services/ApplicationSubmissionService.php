@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\OfficerRole;
+use App\Models\Agency;
 use App\Models\Application;
 use App\Models\ApplicationCategory;
 use App\Models\ApplicationDetail;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Livewire\Forms\ApplicationForm;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -119,9 +121,15 @@ class ApplicationSubmissionService
     private function resolveApplication($user, ?int $applicationId): Application
     {
         if (! $applicationId) {
+            // UM7A: kebenaran disemak semula di backend (bukan hanya route/komponen).
+            if ($user->cannot('create', Application::class)) {
+                throw new AuthorizationException('Anda tidak dibenarkan mendaftar permohonan projek.');
+            }
+
             return new Application([
                 'uuid' => (string) Str::uuid(),
-                'agency_id' => $user->agency_id ?? 1,
+                // UM7A: tiada fallback agensi tetap; agensi pemohon mesti wujud dan aktif.
+                'agency_id' => $this->applicantAgencyId($user),
                 'applicant_id' => $user->id,
             ]);
         }
@@ -133,6 +141,25 @@ class ApplicationSubmissionService
         }
 
         return $application;
+    }
+
+    /**
+     * Agensi pemohon untuk permohonan baharu. Proses dihentikan jika pemohon tiada agensi
+     * atau agensinya tidak aktif / telah dipadam (rekod pengguna tidak diubah).
+     *
+     * @throws ValidationException
+     */
+    private function applicantAgencyId($user): int
+    {
+        $agencyId = $user->agency_id;
+
+        if (! $agencyId || ! Agency::active()->whereKey($agencyId)->exists()) {
+            throw ValidationException::withMessages([
+                'form.agency' => 'Akaun anda tidak mempunyai Jabatan/Agensi yang sah dan aktif. Sila hubungi Urus Setia untuk mengemas kini profil anda sebelum mendaftar permohonan.',
+            ]);
+        }
+
+        return (int) $agencyId;
     }
 
     /**

@@ -18,8 +18,14 @@ class MeetingNumberManagement extends Component
     public ?int $number = null;
     public bool $is_active = true;
 
+    public function mount(): void
+    {
+        $this->ensureUrusSetia();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureUrusSetia();
         $this->resetErrorBag();
         $this->meetingNumberUuid = $uuid;
 
@@ -108,7 +114,7 @@ class MeetingNumberManagement extends Component
 
     protected function ensureUrusSetia(): void
     {
-        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

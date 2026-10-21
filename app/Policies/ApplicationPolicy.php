@@ -8,6 +8,24 @@ use App\Models\User;
 class ApplicationPolicy
 {
     /**
+     * Peranan yang boleh mendaftar permohonan projek baharu (keputusan dasar UM7A).
+     * `pengurusan` dan `superadmin` tidak dibenarkan. Sumber peranan: Spatie (`model_has_roles`).
+     */
+    public const CREATOR_ROLES = ['pengguna_biasa', 'pentadbir_urus_setia'];
+
+    /**
+     * Daftar permohonan baharu. Akaun mesti boleh menggunakan sistem (aktif, tiada kata laluan
+     * sementara) dan memegang salah satu peranan pencipta, tetapi bukan Superadmin/Pengurusan
+     * (dikecualikan secara eksplisit sekiranya pengguna memegang lebih daripada satu peranan).
+     */
+    public function create(User $user): bool
+    {
+        return $user->canUseSystem()
+            && $user->hasAnyRole(self::CREATOR_ROLES)
+            && ! $user->hasAnyRole(['superadmin', 'pengurusan']);
+    }
+
+    /**
      * Papar permohonan & dokumen: pemohon, pegawai bertanggungjawab aktif, urus setia,
      * atau pengguna dari jabatan/agensi yang sama dengan permohonan.
      */

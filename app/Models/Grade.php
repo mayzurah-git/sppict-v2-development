@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -29,8 +30,25 @@ class Grade extends Model implements Auditable
         'is_active' => 'boolean',
     ];
 
+    /**
+     * Gred master yang boleh diberikan kepada pengguna: aktif dan bukan legacy (`code` wujud).
+     * Rekod soft-deleted dikecualikan oleh SoftDeletes.
+     */
+    public function scopeAssignable(Builder $query): Builder
+    {
+        return $query->where('grades.is_active', true)->whereNotNull('grades.code');
+    }
+
+    /**
+     * Jawatan yang membenarkan gred ini (pivot `grade_position`).
+     */
     public function positions()
     {
-        return $this->hasMany(Position::class);
+        return $this->belongsToMany(Position::class)->withTimestamps();
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
     }
 }

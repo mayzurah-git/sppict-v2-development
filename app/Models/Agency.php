@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -27,6 +28,14 @@ class Agency extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Agensi yang boleh dipilih untuk pendaftaran baharu (aktif; soft-deleted dikecualikan oleh SoftDeletes).
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
 
     public function users()
     {

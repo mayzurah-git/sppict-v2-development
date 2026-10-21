@@ -5,11 +5,13 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Models\User;
-use App\Models\Agency;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Hash;
 
+/**
+ * Data rujukan sistem: peranan & permission sahaja (selamat untuk semua persekitaran; idempotent).
+ *
+ * UM7A: agensi contoh dan akaun demo dipindahkan ke DemoAccountsSeeder (local/testing sahaja).
+ * Akaun Superadmin awal diwujudkan melalui `php artisan sppict:create-superadmin`.
+ */
 class RolesAndPermissionsSeeder extends Seeder
 {
     /**
@@ -113,66 +115,5 @@ class RolesAndPermissionsSeeder extends Seeder
         // Role 4: Superadmin (Pembangun Sistem / Lead Administrator)
         $roleSuperAdmin = Role::firstOrCreate(['name' => 'superadmin']);
         $roleSuperAdmin->syncPermissions(Permission::all());
-
-        // 3. Cipta Agensi Contoh
-        $agencyBTM = Agency::firstOrCreate(
-            ['code' => 'BTM'],
-            [
-                'uuid' => (string) Str::uuid(),
-                'name' => 'Bahagian Teknologi Maklumat (BTM)',
-                'category' => 'SUK',
-                'is_active' => true,
-            ]
-        );
-
-        $agencyJKR = Agency::firstOrCreate(
-            ['code' => 'JKR_NS'],
-            [
-                'uuid' => (string) Str::uuid(),
-                'name' => 'Jabatan Kerja Raya Negeri Sembilan',
-                'category' => 'STATE_DEPT',
-                'is_active' => true,
-            ]
-        );
-
-        // 4. Cipta Akaun Pentadbir Awal (Superadmin & Urus Setia)
-        $superadminUser = User::firstOrCreate(
-            ['email' => 'admin.sppict@ns.gov.my'],
-            [
-                'uuid' => (string) Str::uuid(),
-                'agency_id' => $agencyBTM->id,
-                'name' => 'Pentadbir Sistem SPPICT',
-                'position' => 'Pegawai Teknologi Maklumat (F48)',
-                'phone_number' => '06-7659999',
-                'password' => Hash::make('Password123!'),
-            ]
-        );
-        $superadminUser->assignRole($roleSuperAdmin);
-
-        $urusSetiaUser = User::firstOrCreate(
-            ['email' => 'urussetia.mkk@ns.gov.my'],
-            [
-                'uuid' => (string) Str::uuid(),
-                'agency_id' => $agencyBTM->id,
-                'name' => 'Urus Setia',
-                'position' => 'Penolong Pegawai Teknologi Maklumat (FA32)',
-                'phone_number' => '06-7658888',
-                'password' => Hash::make('Password123!'),
-            ]
-        );
-        $urusSetiaUser->assignRole($roleUrusSetia);
-
-        $pemohonUser = User::firstOrCreate(
-            ['email' => 'pemohon.jkr@ns.gov.my'],
-            [
-                'uuid' => (string) Str::uuid(),
-                'agency_id' => $agencyJKR->id,
-                'name' => 'Pengurus Projek JKR',
-                'position' => 'Jurutera Awam (J44)',
-                'phone_number' => '06-7657777',
-                'password' => Hash::make('Password123!'),
-            ]
-        );
-        $pemohonUser->assignRole($rolePenggunaBiasa);
     }
 }

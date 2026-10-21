@@ -41,6 +41,11 @@ class ApplicationForm extends Component
     {
         $user = Auth::user();
 
+        // UM7A: permohonan baharu hanya oleh peranan yang dibenarkan (ApplicationPolicy::create).
+        if (! $uuid) {
+            $this->authorize('create', Application::class);
+        }
+
         // Jika ada UUID (Edit Draf / Tidak Lengkap)
         if ($uuid) {
             $application = Application::with(['details', 'documents', 'primaryOfficer', 'secondaryOfficer'])
@@ -331,6 +336,8 @@ class ApplicationForm extends Component
     // --- SIMPAN PERMOHONAN METODE SERVICE ---
     public function submitApplication(ApplicationSubmissionService $service)
     {
+        $this->authorizeNewApplication();
+
         try {
             // Semak semula semua fasa di server (termasuk had Kos Siling & dokumen); kembali ke fasa yang gagal
             foreach ([1, 2, 3, 4, 5] as $step) {
@@ -368,6 +375,8 @@ class ApplicationForm extends Component
 
     public function saveDraft(ApplicationSubmissionService $service)
     {
+        $this->authorizeNewApplication();
+
         try {
             $user = Auth::user();
             $application = $service->saveDraft($this->form, $user, $this->applicationId);
@@ -381,6 +390,17 @@ class ApplicationForm extends Component
         } catch (\Exception $e) {
             Log::error('Ralat Simpan Draf: ' . $e->getMessage());
             session()->flash('error', 'Gagal menyimpan draf: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * UM7A: semak semula kebenaran mencipta permohonan pada setiap tindakan simpan (peranan boleh
+     * berubah semasa sesi). Draf sedia ada disemak melalui `update` dalam ApplicationSubmissionService.
+     */
+    protected function authorizeNewApplication(): void
+    {
+        if (! $this->applicationId) {
+            $this->authorize('create', Application::class);
         }
     }
 

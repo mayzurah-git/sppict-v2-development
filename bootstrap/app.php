@@ -15,6 +15,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'not-role' => \App\Http\Middleware\EnsureUserDoesNotHaveRole::class,
+            'active' => \App\Http\Middleware\EnsureUserIsActive::class,
+            'password.changed' => \App\Http\Middleware\EnsurePasswordIsChanged::class,
+        ]);
+
+        // UM7: sesi disahkan terhadap hash kata laluan semasa. Apabila kata laluan ditukar/direset,
+        // sesi lain (termasuk kuki "Ingat saya") dibatalkan pada permintaan seterusnya. Sesi yang
+        // melakukan pertukaran dikemas kini secara automatik pada akhir permintaan yang sama.
+        // Dalam kumpulan `web` supaya turut meliputi `/livewire/update`.
+        $middleware->web(append: [
+            \Illuminate\Session\Middleware\AuthenticateSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

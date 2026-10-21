@@ -21,21 +21,27 @@ use App\Livewire\MasterData\ApplicationCategoryManagement;
 use App\Livewire\MasterData\ProjectCategoryManagement;
 use App\Livewire\MasterData\ProcurementTypeManagement;
 use App\Livewire\MasterData\ProcurementMethodManagement;
+use App\Livewire\Users\ManageUsers;
+use App\Livewire\Users\RegisterUser;
+use App\Livewire\Users\RegistrationRequests;
 
 Route::view('/', 'welcome');
 
 Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'active', 'password.changed'])
     ->name('dashboard');
 
 Route::view('profile', 'profile')
-    ->middleware(['auth'])
+    ->middleware(['auth', 'active', 'password.changed'])
     ->name('profile');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// 'active': akaun menunggu kelulusan / ditolak tidak boleh mengakses modul dalaman.
+// 'password.changed': akaun dengan kata laluan sementara mesti menukarnya dahulu.
+Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(function () {
     // Permohonan Baharu
-    Route::get('/application/new', ApplicationForm::class)->middleware('not-role:superadmin')->name('application.create');
-    Route::view('/permohonan/baru', 'pages.permohonan-baru')->middleware('not-role:superadmin');
+    // UM7A: hanya pengguna_biasa & pentadbir_urus_setia (ApplicationPolicy::create); `can` turut persistent dalam Livewire.
+    Route::get('/application/new', ApplicationForm::class)->middleware('can:create,' . \App\Models\Application::class)->name('application.create');
+    Route::view('/permohonan/baru', 'pages.permohonan-baru')->middleware('can:create,' . \App\Models\Application::class);
 
     // Kemaskini draf menggunakan UUID, bukan ID pangkalan data.
     Route::get('/application/edit/{uuid}', ApplicationForm::class)->middleware('not-role:superadmin')->name('application.edit');
@@ -57,6 +63,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/selenggara/nama', MeetingNameManagement::class)->name('names');
         Route::get('/selenggara/bilangan', MeetingNumberManagement::class)->name('numbers');
         Route::get('/selenggara/tahun', MeetingYearManagement::class)->name('years');
+    });
+
+    // Pengurusan Pengguna oleh Urus Setia (UM4): daftar pengguna & semak permohonan Self Register.
+    Route::middleware('role:pentadbir_urus_setia')->prefix('urus-setia/pengguna')->name('users.')->group(function () {
+        Route::get('/', ManageUsers::class)->name('index'); // UM10: senarai & kemas kini pengguna aktif
+        Route::get('/daftar', RegisterUser::class)->name('create');
+        Route::get('/permohonan', RegistrationRequests::class)->name('requests');
     });
 
     // Master Data Permohonan Projek: Urus Setia sahaja.

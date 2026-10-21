@@ -12,6 +12,9 @@ use App\Models\Agency;
 use App\Models\Application;
 use App\Models\ProjectCategory;
 use App\Models\ApplicationOfficer;
+use App\Models\Grade;
+use App\Models\Position;
+use App\Models\ServiceScheme;
 use App\Models\User;
 use App\Notifications\ResponsibleOfficerChanged;
 use App\Services\OfficerHandoverService;
@@ -48,6 +51,7 @@ class ApplicationOfficerTest extends TestCase
 
         $this->agency = $this->makeAgency('JKR');
         $this->applicant = User::factory()->create(['agency_id' => $this->agency->id, 'position' => 'Jurutera J44', 'phone_number' => '06-111']);
+        $this->applicant->assignRole(Role::findOrCreate('pengguna_biasa')); // UM7A: hanya pengguna_biasa/urus setia boleh mendaftar permohonan
         $this->colleague = User::factory()->create(['agency_id' => $this->agency->id, 'position' => 'Penolong Jurutera JA29']);
 
         $this->urusSetia = User::factory()->create(['agency_id' => $this->makeAgency('BTM')->id]);
@@ -285,12 +289,22 @@ class ApplicationOfficerTest extends TestCase
         $application = $this->submittedApplication();
         $superadmin = User::factory()->create(['agency_id' => $this->agency->id]);
         $superadmin->assignRole('superadmin');
-        Role::create(['name' => 'pengguna_biasa']);
+
+        // UM5: borang kemas kini Superadmin memerlukan profil master data lengkap (Jawatan → Gred melalui pivot).
+        $scheme = ServiceScheme::create(['code' => 'J', 'name' => 'Kejuruteraan', 'is_active' => true]);
+        $grade = Grade::create(['code' => '10', 'name' => '10', 'is_active' => true]);
+        $position = Position::create(['title' => 'Jurutera', 'service_scheme_id' => $scheme->id, 'is_active' => true]);
+        $position->grades()->sync([$grade->id]);
 
         Livewire::actingAs($superadmin)->test(UserManagement::class)
-            ->call('openModal', $this->applicant->id)
+            ->call('openModal', $this->applicant->uuid)
+            ->set('no_kad_pengenalan', '800101051234')
+            ->set('position_id', (string) $position->id)
+            ->set('grade_id', (string) $grade->id)
+            ->set('phone_office', '067651111')
+            ->set('phone_mobile', '0121111111')
             ->set('role', 'pengguna_biasa')
-            ->set('agency_id', $this->makeAgency('JPN')->id)
+            ->set('agency_id', (string) $this->makeAgency('JPN')->id)
             ->call('saveUser')
             ->assertHasNoErrors()
             ->assertSee('masih Pegawai Bertanggungjawab')

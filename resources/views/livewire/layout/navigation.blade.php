@@ -49,6 +49,25 @@ new class extends Component
         <div class="flex items-center">
             <x-dropdown align="left" width="w-64">
                 <x-slot name="trigger">
+                    <button type="button" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium leading-5 focus:outline-none transition duration-150 ease-in-out {{ request()->routeIs('users.*') ? 'border-indigo-400 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                        {{ __('Pengurusan Pengguna') }}
+                        <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25" />
+                        </svg>
+                    </button>
+                </x-slot>
+
+                <x-slot name="content">
+                    <x-dropdown-link :href="route('users.index')">{{ __('Senarai Pengguna') }}</x-dropdown-link>
+                    <x-dropdown-link :href="route('users.create')">{{ __('Daftar Pengguna') }}</x-dropdown-link>
+                    <x-dropdown-link :href="route('users.requests')">{{ __('Permohonan Pendaftaran') }}</x-dropdown-link>
+                </x-slot>
+            </x-dropdown>
+        </div>
+
+        <div class="flex items-center">
+            <x-dropdown align="left" width="w-64">
+                <x-slot name="trigger">
                     <button type="button" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium leading-5 focus:outline-none transition duration-150 ease-in-out {{ request()->routeIs('master-data.*') ? 'border-indigo-400 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                         {{ __('Master Data') }}
                         <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -89,11 +108,12 @@ new class extends Component
         </x-nav-link>
     @endhasrole
 
-    @if (! auth()->user()->hasAnyRole(['superadmin', 'pentadbir_urus_setia']))
+    {{-- UM7A: paparan ikut ApplicationPolicy::create (pengguna_biasa & pentadbir_urus_setia); kawalan sebenar di route/komponen/servis. --}}
+    @can('create', \App\Models\Application::class)
         <x-nav-link :href="url('/application/new')" :active="request()->is('application/new')">
             {{ __('Permohonan Baru') }}
         </x-nav-link>
-    @endif
+    @endcan
 
     </div>
 
@@ -110,11 +130,11 @@ new class extends Component
 
             <x-slot name="content">
                 <x-dropdown-link :href="route('profile')" wire:navigate>
-                    {{ __('Profile') }}
+                    {{ __('Profil') }}
                 </x-dropdown-link>
 
                 <button wire:click="logout" type="button" class="block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition duration-150 ease-in-out">
-                    {{ __('Log Out') }}
+                    {{ __('Log Keluar') }}
                 </button>
             </x-slot>
         </x-dropdown>

@@ -42,7 +42,13 @@
                             <td class="p-3.5 text-slate-600">
                                 @if ($position->serviceScheme){{ $position->serviceScheme->code }} — {{ $position->serviceScheme->name }}@else—@endif
                             </td>
-                            <td class="p-3.5 text-slate-600">{{ $position->grade?->code ?? '—' }}</td>
+                            <td class="p-3.5 text-slate-600">
+                                @forelse ($position->grades as $grade)
+                                    <span class="inline-block px-2 py-0.5 mb-0.5 bg-slate-100 text-slate-700 rounded-full text-[10px] font-semibold">{{ $grade->code ?? $grade->name }}</span>
+                                @empty
+                                    —
+                                @endforelse
+                            </td>
                             <td class="p-3.5">
                                 @if ($position->is_active)
                                     <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-full text-[10px]">Aktif</span>
@@ -91,13 +97,20 @@
                     </x-form.select>
                     @error('service_scheme_id') <span class="text-red-500 text-xs block">{{ $message }}</span> @enderror
 
-                    <x-form.select label="Gred Jawatan" wire:model="grade_id" required>
-                        <option value="">-- Pilih Gred Jawatan --</option>
-                        @foreach ($grades as $grade)
-                            <option value="{{ $grade->id }}">{{ $grade->code ?? $grade->name }}{{ $grade->is_active ? '' : ' (Tidak Aktif)' }}</option>
-                        @endforeach
-                    </x-form.select>
-                    @error('grade_id') <span class="text-red-500 text-xs block">{{ $message }}</span> @enderror
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700">Gred Jawatan <span class="text-red-500">*</span></label>
+                        <p class="text-[10px] text-slate-500">Pilih satu atau lebih gred yang sah bagi jawatan ini.</p>
+                        <div class="mt-2 grid grid-cols-4 sm:grid-cols-5 gap-2">
+                            @foreach ($grades as $grade)
+                                <label class="inline-flex items-center gap-1.5 text-xs text-gray-700 {{ $grade->is_active && ! $grade->trashed() ? '' : 'text-slate-400' }}">
+                                    <input type="checkbox" wire:model="grade_ids" value="{{ $grade->id }}" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500">
+                                    {{ $grade->code ?? $grade->name }}{{ $grade->is_active && ! $grade->trashed() ? '' : ' (Tidak Aktif)' }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                    @error('grade_ids') <span class="text-red-500 text-xs block">{{ $message }}</span> @enderror
+                    @error('grade_ids.*') <span class="text-red-500 text-xs block">{{ $message }}</span> @enderror
 
                     <div>
                         <label class="block text-xs font-medium text-gray-700">Penerangan</label>

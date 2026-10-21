@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\UsesApplicationMasterData;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -32,6 +33,7 @@ class ApplicationMasterDataIntegrationTest extends TestCase
 
         $agency = Agency::create(['code' => 'JKR', 'name' => 'Agensi JKR', 'category' => 'SUK', 'is_active' => true]);
         $this->applicant = User::factory()->create(['agency_id' => $agency->id]);
+        $this->applicant->assignRole(Role::findOrCreate('pengguna_biasa')); // UM7A: hanya pengguna_biasa/urus setia boleh mendaftar permohonan
     }
 
     // --- DROPDOWN & NILAI LALAI ---

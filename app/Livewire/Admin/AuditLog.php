@@ -12,6 +12,15 @@ class AuditLog extends Component
 
     public string $search = '';
 
+    /**
+     * UM7: `boot()` dijalankan pada setiap permintaan (paparan awal & setiap `/livewire/update`),
+     * jadi data audit tidak boleh dibaca semula tanpa peranan Superadmin yang aktif.
+     */
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->hasRole('superadmin') && auth()->user()->canUseSystem(), 403);
+    }
+
     public function updatingSearch(): void
     {
         $this->resetPage();

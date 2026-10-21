@@ -3,7 +3,7 @@
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use Livewire\Volt\Component;
 
 new class extends Component
@@ -27,12 +27,40 @@ new class extends Component
     {
         $user = Auth::user();
 
+        // UM8: normalisasi & semakan unik e-mel diselaraskan dengan borang pengguna lain
+        // (tanpa mengira huruf besar/kecil, termasuk akaun soft-deleted, kecuali akaun sendiri).
+        $this->name = Str::squish($this->name);
+        $this->email = Str::lower(trim($this->email));
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    $taken = User::withTrashed()
+                        ->whereRaw('LOWER(email) = ?', [Str::lower($value)])
+                        ->whereKeyNot($user->id)
+                        ->exists();
+
+                    if ($taken) {
+                        $fail('E-mel Rasmi ini telah didaftarkan.');
+                    }
+                },
+            ],
+        ], [
+            'required' => ':attribute wajib diisi.',
+            'email' => 'Format :attribute tidak sah.',
+            'max' => ':attribute tidak boleh melebihi :max aksara.',
+        ], [
+            'name' => 'Nama Penuh',
+            'email' => 'E-mel Rasmi',
         ]);
 
-        $user->fill($validated);
+        // Hanya nama & e-mel; peranan, status, agensi dan medan kelulusan tidak boleh diubah melalui Profil.
+        $user->fill(['name' => $validated['name'], 'email' => $validated['email']]);
 
         if ($user->isDirty('email')) {
             $user->email_verified_at = null;
@@ -65,39 +93,39 @@ new class extends Component
 <section>
     <header>
         <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {{ __('Profile Information') }}
+            {{ __('Maklumat Profil') }}
         </h2>
 
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {{ __("Update your account's profile information and email address.") }}
+            {{ __('Kemas kini nama dan e-mel rasmi akaun anda.') }}
         </p>
     </header>
 
     <form wire:submit="updateProfileInformation" class="mt-6 space-y-6">
         <div>
-            <x-input-label for="name" :value="__('Name')" />
+            <x-input-label for="name" :value="__('Nama Penuh')" />
             <x-text-input wire:model="name" id="name" name="name" type="text" class="mt-1 block w-full" required autofocus autocomplete="name" />
             <x-input-error class="mt-2" :messages="$errors->get('name')" />
         </div>
 
         <div>
-            <x-input-label for="email" :value="__('Email')" />
+            <x-input-label for="email" :value="__('E-mel Rasmi')" />
             <x-text-input wire:model="email" id="email" name="email" type="email" class="mt-1 block w-full" required autocomplete="username" />
             <x-input-error class="mt-2" :messages="$errors->get('email')" />
 
             @if (auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
                 <div>
                     <p class="text-sm mt-2 text-gray-800 dark:text-gray-200">
-                        {{ __('Your email address is unverified.') }}
+                        {{ __('Alamat e-mel anda belum disahkan.') }}
 
                         <button wire:click.prevent="sendVerification" class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                            {{ __('Click here to re-send the verification email.') }}
+                            {{ __('Klik di sini untuk menghantar semula e-mel pengesahan.') }}
                         </button>
                     </p>
 
                     @if (session('status') === 'verification-link-sent')
                         <p class="mt-2 font-medium text-sm text-green-600 dark:text-green-400">
-                            {{ __('A new verification link has been sent to your email address.') }}
+                            {{ __('Pautan pengesahan baharu telah dihantar ke alamat e-mel anda.') }}
                         </p>
                     @endif
                 </div>
@@ -105,10 +133,10 @@ new class extends Component
         </div>
 
         <div class="flex items-center gap-4">
-            <x-primary-button>{{ __('Save') }}</x-primary-button>
+            <x-primary-button>{{ __('Simpan') }}</x-primary-button>
 
             <x-action-message class="me-3" on="profile-updated">
-                {{ __('Saved.') }}
+                {{ __('Disimpan.') }}
             </x-action-message>
         </div>
     </form>

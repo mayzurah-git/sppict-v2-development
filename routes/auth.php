@@ -8,6 +8,10 @@ Route::middleware('guest')->group(function () {
     Volt::route('register', 'pages.auth.register')
         ->name('register');
 
+    // Self Register: makluman selepas pendaftaran (akaun menunggu kelulusan, tidak log masuk).
+    Volt::route('register/diterima', 'pages.auth.registration-pending')
+        ->name('register.pending');
+
     Volt::route('login', 'pages.auth.login')
         ->name('login');
 
@@ -18,7 +22,14 @@ Route::middleware('guest')->group(function () {
         ->name('password.reset');
 });
 
-Route::middleware('auth')->group(function () {
+// Tukar kata laluan sementara (UM6): satu-satunya halaman dalaman yang dibenarkan semasa
+// `must_change_password = true`. Sengaja tanpa middleware `password.changed` (elak redirect loop).
+Route::middleware(['auth', 'active'])->group(function () {
+    Volt::route('tukar-kata-laluan', 'pages.auth.change-password')
+        ->name('password.change');
+});
+
+Route::middleware(['auth', 'active', 'password.changed'])->group(function () {
     Volt::route('verify-email', 'pages.auth.verify-email')
         ->name('verification.notice');
 

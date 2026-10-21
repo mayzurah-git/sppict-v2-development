@@ -26,8 +26,14 @@ class GradeManagement extends Component
         $this->resetPage();
     }
 
+    public function mount(): void
+    {
+        $this->ensureSuperadmin();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureSuperadmin();
         $this->resetErrorBag();
         $grade = $uuid ? Grade::where('uuid', $uuid)->firstOrFail() : null;
 
@@ -125,13 +131,19 @@ class GradeManagement extends Component
             return;
         }
 
+        if ($grade->users()->withTrashed()->exists()) {
+            session()->flash('error', 'Gred tidak boleh dipadam kerana masih digunakan oleh User.');
+
+            return;
+        }
+
         $grade->delete();
         session()->flash('message', 'Gred berjaya dipadamkan secara soft delete.');
     }
 
     protected function ensureSuperadmin(): void
     {
-        abort_unless(auth()->user()?->hasRole('superadmin'), 403);
+        abort_unless(auth()->user()?->hasRole('superadmin') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

@@ -18,8 +18,14 @@ class MeetingYearManagement extends Component
     public ?int $year = null;
     public bool $is_active = true;
 
+    public function mount(): void
+    {
+        $this->ensureUrusSetia();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureUrusSetia();
         $this->resetErrorBag();
         $this->meetingYearUuid = $uuid;
 
@@ -109,7 +115,7 @@ class MeetingYearManagement extends Component
 
     protected function ensureUrusSetia(): void
     {
-        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

@@ -62,9 +62,9 @@ class ApplicationOfficer extends Model implements Auditable
             'agency_id' => $user->agency_id,
             'name' => $user->name,
             'position' => $user->getAttribute('position') ?: $position?->title,
-            'grade' => $position?->grade?->code,
+            'grade' => $user->grade?->code ?? $position?->grade?->code,
             'email' => $user->email,
-            'phone' => $user->phone_number,
+            'phone' => $user->phone_mobile ?: ($user->phone_office ?: $user->phone_number),
         ];
     }
 

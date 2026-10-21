@@ -27,6 +27,11 @@ class MeetingList extends Component
     #[Url(as: 'status', except: '')]
     public string $status = '';
 
+    public function mount(): void
+    {
+        $this->ensureUrusSetia();
+    }
+
     public function updating(string $property): void
     {
         if (in_array($property, ['search', 'meetingNameId', 'meetingYearId', 'status'], true)) {
@@ -58,7 +63,7 @@ class MeetingList extends Component
 
     protected function ensureUrusSetia(): void
     {
-        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

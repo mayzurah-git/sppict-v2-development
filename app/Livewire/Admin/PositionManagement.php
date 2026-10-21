@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\Grade;
 use App\Models\Position;
 use App\Models\ServiceScheme;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -20,7 +21,8 @@ class PositionManagement extends Component
     public ?string $positionUuid = null;
     public string $title = '';
     public ?int $service_scheme_id = null;
-    public ?int $grade_id = null;
+    /** @var array<int, int|string> Gred yang sah bagi jawatan (pivot grade_position). */
+    public array $grade_ids = [];
     public string $description = '';
     public bool $is_active = true;
 
@@ -29,8 +31,14 @@ class PositionManagement extends Component
         $this->resetPage();
     }
 
+    public function mount(): void
+    {
+        $this->ensureSuperadmin();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureSuperadmin();
         $this->resetErrorBag();
         $position = $uuid ? Position::where('uuid', $uuid)->firstOrFail() : null;
 
@@ -45,11 +53,11 @@ class PositionManagement extends Component
         if ($position) {
             $this->title = $position->title;
             $this->service_scheme_id = $position->service_scheme_id;
-            $this->grade_id = $position->grade_id;
+            $this->grade_ids = $position->grades()->pluck('grades.id')->map(fn ($id) => (string) $id)->all();
             $this->description = $position->description ?? '';
             $this->is_active = $position->is_active;
         } else {
-            $this->reset(['title', 'service_scheme_id', 'grade_id', 'description', 'positionUuid']);
+            $this->reset(['title', 'service_scheme_id', 'grade_ids', 'description', 'positionUuid']);
             $this->is_active = true;
         }
 
@@ -59,7 +67,7 @@ class PositionManagement extends Component
     public function closeModal(): void
     {
         $this->showModal = false;
-        $this->reset(['title', 'service_scheme_id', 'grade_id', 'description', 'is_active', 'positionUuid']);
+        $this->reset(['title', 'service_scheme_id', 'grade_ids', 'description', 'is_active', 'positionUuid']);
     }
 
     public function save(): void
@@ -82,9 +90,10 @@ class PositionManagement extends Component
                     ->where('is_active', true)
                     ->whereNull('deleted_at')),
             ],
-            'grade_id' => [
-                'required',
+            'grade_ids' => ['required', 'array', 'min:1'],
+            'grade_ids.*' => [
                 'integer',
+                'distinct',
                 Rule::exists('grades', 'id')->where(fn ($query) => $query
                     ->whereNotNull('code')
                     ->where('is_active', true)
@@ -103,11 +112,15 @@ class PositionManagement extends Component
         $position->fill([
             'title' => $this->title,
             'service_scheme_id' => $this->service_scheme_id,
-            'grade_id' => $this->grade_id,
             'description' => $this->description !== '' ? $this->description : null,
             'is_active' => $this->is_active,
         ]);
-        $position->save();
+
+        // `positions.grade_id` (legacy) tidak lagi ditulis; Gred yang sah disimpan dalam pivot.
+        DB::transaction(function () use ($position): void {
+            $position->save();
+            $position->grades()->sync(array_map('intval', $this->grade_ids));
+        });
 
         session()->flash('message', $this->positionUuid
             ? 'Jawatan berjaya dikemaskini!'
@@ -167,10 +180,9 @@ class PositionManagement extends Component
             ->whereKey($position->service_scheme_id)
             ->where('is_active', true)
             ->exists()
-            && Grade::query()
-                ->whereKey($position->grade_id)
-                ->whereNotNull('code')
-                ->where('is_active', true)
+            && $position->grades()
+                ->whereNotNull('grades.code')
+                ->where('grades.is_active', true)
                 ->exists();
     }
 
@@ -181,13 +193,13 @@ class PositionManagement extends Component
 
     protected function ensureSuperadmin(): void
     {
-        abort_unless(auth()->user()?->hasRole('superadmin'), 403);
+        abort_unless(auth()->user()?->hasRole('superadmin') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()
     {
         $positions = Position::query()
-            ->with(['serviceScheme', 'grade'])
+            ->with(['serviceScheme', 'grades' => fn ($query) => $query->orderByRaw('CAST(grades.code AS UNSIGNED)')])
             ->withCount('users')
             ->when($this->search, function ($query): void {
                 $query->where(function ($query): void {
@@ -196,7 +208,7 @@ class PositionManagement extends Component
                             $schemeQuery->where('code', 'like', '%' . $this->search . '%')
                                 ->orWhere('name', 'like', '%' . $this->search . '%');
                         })
-                        ->orWhereHas('grade', function ($gradeQuery): void {
+                        ->orWhereHas('grades', function ($gradeQuery): void {
                             $gradeQuery->where('code', 'like', '%' . $this->search . '%')
                                 ->orWhere('name', 'like', '%' . $this->search . '%');
                         });
@@ -226,12 +238,10 @@ class PositionManagement extends Component
                 }
             }
 
-            if ($current?->grade_id && ! $grades->contains('id', $current->grade_id)) {
-                $currentGrade = Grade::withTrashed()->find($current->grade_id);
-                if ($currentGrade) {
-                    $grades->push($currentGrade);
-                }
-            }
+            // Gred tidak aktif yang masih dipautkan tetap dipaparkan supaya Superadmin boleh menyahpilihnya.
+            $current?->grades()->withTrashed()->get()
+                ->reject(fn (Grade $grade) => $grades->contains('id', $grade->id))
+                ->each(fn (Grade $grade) => $grades->push($grade));
         }
 
         return view('livewire.admin.position-management', [

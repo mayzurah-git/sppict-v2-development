@@ -27,8 +27,14 @@ class MeetingNameManagement extends Component
         $this->resetPage();
     }
 
+    public function mount(): void
+    {
+        $this->ensureUrusSetia();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureUrusSetia();
         $this->resetErrorBag();
         $this->meetingNameUuid = $uuid;
 
@@ -130,7 +136,7 @@ class MeetingNameManagement extends Component
 
     protected function ensureUrusSetia(): void
     {
-        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

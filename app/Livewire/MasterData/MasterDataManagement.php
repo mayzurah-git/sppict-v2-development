@@ -195,7 +195,7 @@ abstract class MasterDataManagement extends Component
 
     protected function ensureUrusSetia(): void
     {
-        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia'), 403);
+        abort_unless(auth()->user()?->hasRole('pentadbir_urus_setia') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

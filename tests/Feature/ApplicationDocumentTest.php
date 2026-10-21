@@ -34,6 +34,7 @@ class ApplicationDocumentTest extends TestCase
 
         $this->agency = $this->makeAgency('JKR');
         $this->applicant = User::factory()->create(['agency_id' => $this->agency->id]);
+        $this->applicant->assignRole(Role::findOrCreate('pengguna_biasa')); // UM7A: hanya pengguna_biasa/urus setia boleh mendaftar permohonan
     }
 
     // --- FORMAT & SAIZ FAIL ---

@@ -62,11 +62,19 @@ class MeetingMasterDataTest extends TestCase
         $superadmin = User::factory()->create();
         $superadmin->assignRole('superadmin');
 
+        // UM7: komponen tidak boleh dimuatkan (mount dilindungi).
         Livewire::actingAs($superadmin)
             ->test(MeetingYearManagement::class)
-            ->set('year', 2030)
-            ->call('save')
             ->assertForbidden();
+
+        // UM7: tindakan juga disemak semula di server jika peranan berubah selepas komponen dimuatkan.
+        $component = Livewire::actingAs($this->urusSetia)
+            ->test(MeetingYearManagement::class)
+            ->set('year', 2030);
+
+        $this->urusSetia->syncRoles(['superadmin']);
+
+        $component->call('save')->assertForbidden();
 
         $this->assertDatabaseMissing('meeting_years', ['year' => 2030]);
     }

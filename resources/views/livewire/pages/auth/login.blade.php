@@ -20,6 +20,13 @@ new #[Layout('layouts.guest')] class extends Component
 
         Session::regenerate();
 
+        // Kata laluan sementara: terus ke halaman Tukar Kata Laluan (turut dikuatkuasakan oleh middleware `password.changed`).
+        if (auth()->user()->must_change_password) {
+            $this->redirectRoute('password.change', navigate: true);
+
+            return;
+        }
+
         $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
     }
 }; ?>
@@ -103,4 +110,11 @@ new #[Layout('layouts.guest')] class extends Component
             </x-primary-button>
         </div>
     </form>
+
+    @if (Route::has('register'))
+        <p class="mt-6 text-sm text-center text-gray-600 dark:text-gray-400">
+            Belum mempunyai akaun?
+            <a href="{{ route('register') }}" wire:navigate class="font-semibold underline hover:text-gray-900 dark:hover:text-gray-100">Daftar di sini</a>
+        </p>
+    @endif
 </div>

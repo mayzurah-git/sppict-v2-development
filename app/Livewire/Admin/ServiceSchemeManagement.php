@@ -26,8 +26,14 @@ class ServiceSchemeManagement extends Component
         $this->resetPage();
     }
 
+    public function mount(): void
+    {
+        $this->ensureSuperadmin();
+    }
+
     public function openModal(?string $uuid = null): void
     {
+        $this->ensureSuperadmin();
         $this->resetErrorBag();
         $this->serviceSchemeUuid = $uuid;
 
@@ -119,7 +125,7 @@ class ServiceSchemeManagement extends Component
 
     protected function ensureSuperadmin(): void
     {
-        abort_unless(auth()->user()?->hasRole('superadmin'), 403);
+        abort_unless(auth()->user()?->hasRole('superadmin') && auth()->user()->canUseSystem(), 403);
     }
 
     public function render()

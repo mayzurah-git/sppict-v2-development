@@ -75,7 +75,9 @@
                 @else
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                         <div><h2 class="text-2xl font-black text-slate-900 tracking-tight">Sistem Permohonan Projek ICT (SPPICT) v2</h2><p class="text-xs text-slate-500 mt-1">Sistem Permohonan dan Pemantauan Projek ICT.</p></div>
-                        <a href="{{ url('/application/new') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition hover:scale-105"><span class="mr-1.5 text-base">+</span> Permohonan Baharu</a>
+                        @can('create', \App\Models\Application::class)
+                            <a href="{{ url('/application/new') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition hover:scale-105"><span class="mr-1.5 text-base">+</span> Permohonan Baharu</a>
+                        @endcan
                     </div>
 
                     @include('livewire.partials.jtict-status', ['meeting' => \App\Models\Meeting::currentJtict()])

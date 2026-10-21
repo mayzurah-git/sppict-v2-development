@@ -152,14 +152,13 @@ class Meeting extends Model implements Auditable
     }
 
     /**
-     * Penerima Makluman Mesyuarat: pengguna aktif (belum dipadam) yang memegang peranan ahli
-     * dan bukan superadmin.
-     *
-     * TODO: tapis juga users.is_active apabila status pengguna ditambah dalam Pengurusan Pengguna.
+     * Penerima Makluman Mesyuarat: pengguna aktif (status `active` dan belum dipadam) yang memegang
+     * peranan ahli dan bukan superadmin. Pemohon Self Register yang belum diluluskan/ditolak dikecualikan.
      */
     public static function notificationRecipients(): Collection
     {
         return User::query()
+            ->active()
             ->whereHas('roles', fn (Builder $query) => $query->whereIn('name', self::MEMBER_ROLES))
             ->whereDoesntHave('roles', fn (Builder $query) => $query->where('name', 'superadmin'))
             ->get();

@@ -27,6 +27,12 @@
         </div>
     @endif
 
+    @error('form.agency')
+        <div class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 text-xs rounded">
+            {{ $message }}
+        </div>
+    @enderror
+
     <!-- INCLUSION PARTIAL VIEWS (MENGIKUT 5 FASA) -->
     <div class="min-h-[350px]" wire:key="application-step-{{ $currentStep }}">
         @if ($currentStep === 1)

@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Agency;
+use App\Models\User;
+use Spatie\Permission\Models\Role;
 use App\Livewire\ApplicationForm;
 use App\Models\ProjectCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,7 +26,7 @@ class ApplicationCostSummaryTest extends TestCase
             'unit_cost' => $cost,
         ], $unitCosts);
 
-        return Livewire::test(ApplicationForm::class)
+        return Livewire::actingAs($this->applicant())->test(ApplicationForm::class)
             ->set('form.ceiling_cost', $ceilingCost)
             ->set('form.estimated_cost', $estimatedCost)
             ->set('form.details', [['project_category_id' => $this->masterId(ProjectCategory::class, 'projek_baharu'), 'items' => $items]])
@@ -75,7 +78,7 @@ class ApplicationCostSummaryTest extends TestCase
 
     public function test_estimated_cost_cannot_exceed_ceiling_cost(): void
     {
-        Livewire::test(ApplicationForm::class)
+        Livewire::actingAs($this->applicant())->test(ApplicationForm::class)
             ->set('form.ceiling_cost', 50000)
             ->set('form.estimated_cost', 60000)
             ->set('form.expected_duration_months', 12)
@@ -84,5 +87,15 @@ class ApplicationCostSummaryTest extends TestCase
             ->call('nextStep')
             ->assertHasErrors('form.estimated_cost')
             ->assertSet('currentStep', 2);
+    }
+    /**
+     * UM7A: borang permohonan baharu memerlukan peranan pengguna_biasa / pentadbir_urus_setia.
+     */
+    private function applicant(): User
+    {
+        $user = User::factory()->create(['agency_id' => Agency::create(['code' => 'JKR', 'name' => 'Agensi JKR', 'category' => 'SUK', 'is_active' => true])->id]);
+        $user->assignRole(Role::findOrCreate('pengguna_biasa'));
+
+        return $user;
     }
 }
