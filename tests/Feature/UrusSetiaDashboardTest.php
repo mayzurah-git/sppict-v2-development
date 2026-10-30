@@ -94,6 +94,20 @@ class UrusSetiaDashboardTest extends TestCase
             ->assertSee(route('users.requests'));
     }
 
+    public function test_review_table_has_no_kemaskini_column_for_urus_setia_only(): void
+    {
+        $this->actingAs($this->urusSetia)->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('<th scope="col" class="px-4 py-3">Kemaskini</th>', false);
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $user->assignRole('pengguna_biasa');
+
+        $this->actingAs($user)->get('/dashboard')
+            ->assertOk()
+            ->assertSee('<th scope="col" class="px-4 py-3">Kemaskini</th>', false);
+    }
+
     public function test_other_roles_do_not_see_urus_setia_dashboard(): void
     {
         $user = User::factory()->create(['agency_id' => $this->agency->id]);
