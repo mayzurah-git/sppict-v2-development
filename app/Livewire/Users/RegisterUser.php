@@ -4,7 +4,9 @@ namespace App\Livewire\Users;
 
 use App\Enums\UserStatus;
 use App\Livewire\Concerns\HandlesUserProfileFields;
+use App\Livewire\Concerns\ResendsAccountSetupLinks;
 use App\Models\User;
+use App\Support\AccountSetupLinkSender;
 use App\Support\TemporaryPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,14 +18,15 @@ use Livewire\Component;
 /**
  * UM4: Pendaftaran pengguna oleh Urus Setia.
  *
- * Akaun dicipta aktif dengan kata laluan sementara yang dijana sistem dan wajib ditukar
- * (`must_change_password`). Kata laluan dipaparkan sekali sahaja kepada Urus Setia dan
- * tidak disimpan dalam session, log atau audit.
+ * Akaun dicipta aktif dengan kata laluan rawak yang tidak didedahkan kepada sesiapa
+ * (`must_change_password`). UM13: pengguna menerima pautan "Tetapkan Kata Laluan" melalui e-mel.
+ * Jika e-mel gagal, status dipaparkan bersama butang Jana Semula.
  */
 #[Layout('layouts.app')]
 class RegisterUser extends Component
 {
     use HandlesUserProfileFields;
+    use ResendsAccountSetupLinks;
 
     /**
      * Tahap capaian yang boleh didaftarkan oleh Urus Setia. `superadmin` sengaja dikecualikan.
@@ -36,11 +39,20 @@ class RegisterUser extends Component
 
     public string $role = '';
 
+    /**
+     * Akaun terakhir yang didaftarkan dan status penghantaran e-mel pautan (UM13).
+     */
     #[Locked]
-    public ?string $temporaryPassword = null;
+    public ?string $createdUserUuid = null;
 
     #[Locked]
     public ?string $createdUserName = null;
+
+    #[Locked]
+    public ?string $createdUserEmail = null;
+
+    #[Locked]
+    public ?bool $setupLinkSent = null;
 
     public function mount(): void
     {
@@ -54,14 +66,13 @@ class RegisterUser extends Component
 
         $validated = $this->validate($this->rules(), $this->messages(), $this->validationAttributes());
 
-        $temporaryPassword = TemporaryPassword::generate(12);
-
-        $user = DB::transaction(function () use ($validated, $temporaryPassword): User {
+        $user = DB::transaction(function () use ($validated): User {
             $user = new User();
             $user->fill($this->profileAttributesForSave($validated) + [
-                'password' => Hash::make($temporaryPassword),
+                // Kata laluan rawak yang tidak didedahkan; pengguna menetapkan sendiri melalui pautan e-mel.
+                'password' => Hash::make(TemporaryPassword::generate(32)),
             ]);
-            // Didaftar oleh Urus Setia: terus aktif, tetapi kata laluan sementara wajib ditukar.
+            // Didaftar oleh Urus Setia: terus aktif, kata laluan perlu ditetapkan oleh pengguna.
             $user->forceFill([
                 'status' => UserStatus::Active,
                 'must_change_password' => true,
@@ -71,21 +82,25 @@ class RegisterUser extends Component
             return $user;
         });
 
-        $this->temporaryPassword = $temporaryPassword;
-        $this->createdUserName = $user->name;
+        // Dihantar selepas transaksi: kegagalan e-mel tidak membatalkan pendaftaran.
+        $this->afterSetupLinkAttempt($user, AccountSetupLinkSender::send($user));
 
         $this->resetProfileFields();
         $this->reset('role');
         $this->resetValidation();
     }
 
-    /**
-     * Tutup paparan kata laluan sementara; ia tidak boleh dipaparkan semula.
-     */
-    public function dismissTemporaryPassword(): void
+    public function dismissSetupStatus(): void
     {
-        $this->temporaryPassword = null;
-        $this->createdUserName = null;
+        $this->reset('createdUserUuid', 'createdUserName', 'createdUserEmail', 'setupLinkSent');
+    }
+
+    protected function afterSetupLinkAttempt(User $user, bool $sent): void
+    {
+        $this->createdUserUuid = $user->uuid;
+        $this->createdUserName = $user->name;
+        $this->createdUserEmail = $user->email;
+        $this->setupLinkSent = $sent;
     }
 
     protected function rules(): array

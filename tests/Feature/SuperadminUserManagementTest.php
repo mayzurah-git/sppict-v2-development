@@ -10,9 +10,13 @@ use App\Models\Position;
 use App\Models\ServiceScheme;
 use App\Models\User;
 use Database\Seeders\GradeSeeder;
+use App\Notifications\AccountSetupLink;
+use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password as PasswordBroker;
 use Livewire\Exceptions\PublicPropertyNotFoundException;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
@@ -20,6 +24,7 @@ use OwenIt\Auditing\Models\Audit;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
+use Tests\Concerns\CapturesSetupLinks;
 use Tests\TestCase;
 
 /**
@@ -27,6 +32,7 @@ use Tests\TestCase;
  */
 class SuperadminUserManagementTest extends TestCase
 {
+    use CapturesSetupLinks;
     use RefreshDatabase;
 
     private User $superadmin;
@@ -213,55 +219,67 @@ class SuperadminUserManagementTest extends TestCase
     }
 
     // =========================================================
-    // Kata laluan sementara
+    // UM13: pautan Tetapkan Kata Laluan (tiada kata laluan dipaparkan)
     // =========================================================
 
-    public function test_temporary_password_is_generated_hashed_and_shown_once_after_success(): void
+    public function test_created_account_receives_setup_link_and_no_password_is_shown(): void
     {
-        $component = Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal');
-        $component->assertSet('temporaryPassword', null);
+        Notification::fake();
 
-        $this->fill($component)->call('saveUser')->assertHasNoErrors();
-
-        $temporary = $component->get('temporaryPassword');
-        $this->assertIsString($temporary);
-        $this->assertGreaterThanOrEqual(12, strlen($temporary));
-        $this->assertNotSame('Password123!', $temporary);
-        $component->assertSee($temporary)->assertSet('temporaryPasswordFor', 'Aminah binti Ali');
+        $component = $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'))
+            ->call('saveUser')
+            ->assertHasNoErrors()
+            ->assertSee('Pautan Tetapkan Kata Laluan dihantar ke aminah@ns.gov.my');
 
         $user = User::where('email', 'aminah@ns.gov.my')->firstOrFail();
-        $this->assertTrue(Hash::check($temporary, $user->password));
-        $this->assertNotSame($temporary, $user->password);
-        $this->assertStringNotContainsString($temporary, json_encode(session()->all()));
+        $this->assertTrue($user->must_change_password);
+        $this->assertFalse(Hash::check('Password123!', $user->password));
 
-        $component->call('dismissTemporaryPassword')->assertSet('temporaryPassword', null)->assertDontSee($temporary);
+        $token = $this->sentToken($user, isReset: false);
+        $this->assertTrue(PasswordBroker::broker('account_setup')->tokenExists($user, $token));
+        $component->assertDontSee($token);
+        $this->assertStringNotContainsString($token, json_encode(session()->all()));
+    }
+
+    public function test_created_account_shows_email_failure_message(): void
+    {
+        $this->mock(NotificationDispatcher::class)->shouldReceive('sendNow')->andThrow(new RuntimeException('SMTP tidak tersedia'));
+
+        $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'))
+            ->call('saveUser')
+            ->assertHasNoErrors()
+            ->assertSee('e-mel gagal dihantar');
+
+        $user = User::where('email', 'aminah@ns.gov.my')->firstOrFail();
+        $this->assertDatabaseMissing('account_setup_tokens', ['email' => $user->email]);
     }
 
     public function test_sensitive_fields_and_locked_properties_cannot_be_set(): void
     {
         $component = Livewire::actingAs($this->superadmin)->test(UserManagement::class);
 
-        foreach (['password', 'status', 'approved_by', 'approved_at', 'must_change_password', 'role_id', 'userId'] as $property) {
+        foreach (['password', 'status', 'approved_by', 'approved_at', 'must_change_password', 'role_id', 'userId', 'temporaryPassword'] as $property) {
             try {
                 $component->set($property, 'x');
                 $this->fail("Property [{$property}] tidak sepatutnya wujud.");
             } catch (PublicPropertyNotFoundException) {
-                // Dijangka.
+                $this->addToAssertionCount(1); // Dijangka.
             }
         }
 
-        foreach (['userUuid', 'temporaryPassword', 'temporaryPasswordFor'] as $property) {
+        foreach (['userUuid'] as $property) {
             try {
                 $component->set($property, 'x');
                 $this->fail("Property [{$property}] tidak sepatutnya boleh diubah.");
             } catch (CannotUpdateLockedPropertyException) {
-                // Dijangka.
+                $this->addToAssertionCount(1); // Dijangka.
             }
         }
     }
 
     public function test_failed_creation_leaves_no_account_and_no_password(): void
     {
+        Notification::fake();
         $component = $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'));
 
         User::created(function (): void {
@@ -276,28 +294,29 @@ class SuperadminUserManagementTest extends TestCase
         }
 
         $this->assertSame(0, User::where('email', 'aminah@ns.gov.my')->count());
-        $component->assertSet('temporaryPassword', null);
+        Notification::assertNothingSent();
     }
 
-    public function test_reset_password_generates_new_temporary_password_for_target_only(): void
+    public function test_reset_password_invalidates_old_password_and_sends_link_to_target_only(): void
     {
+        Notification::fake();
+
         $target = User::factory()->create(['name' => 'Sasaran']);
         $target->assignRole('pengguna_biasa');
         $bystander = User::factory()->create();
         $bystanderHash = $bystander->password;
         $oldRememberToken = $target->remember_token;
 
-        $component = Livewire::actingAs($this->superadmin)->test(UserManagement::class)
-            ->assertSet('temporaryPassword', null)
-            ->call('resetPassword', $target->uuid);
+        Livewire::actingAs($this->superadmin)->test(UserManagement::class)
+            ->call('resetPassword', $target->uuid)
+            ->assertSee("Pautan Tetapkan Kata Laluan dihantar ke {$target->email}");
 
-        $temporary = $component->get('temporaryPassword');
-        $this->assertIsString($temporary);
-        $this->assertNotSame('Password123!', $temporary);
-        $component->assertSee($temporary)->assertSet('temporaryPasswordFor', 'Sasaran');
+        $token = $this->sentToken($target, isReset: true);
+        Notification::assertNotSentTo($bystander, AccountSetupLink::class);
 
         $target->refresh();
-        $this->assertTrue(Hash::check($temporary, $target->password));
+        $this->assertFalse(Hash::check('password', $target->password));
+        $this->assertTrue(PasswordBroker::broker('account_setup')->tokenExists($target, $token));
         $this->assertTrue($target->must_change_password);
         $this->assertNotSame($oldRememberToken, $target->remember_token);
         $this->assertSame(UserStatus::Active, $target->status);
@@ -305,7 +324,7 @@ class SuperadminUserManagementTest extends TestCase
 
         $this->assertSame($bystanderHash, $bystander->fresh()->password);
         $this->assertFalse($bystander->fresh()->must_change_password);
-        $this->assertStringNotContainsString($temporary, json_encode(session()->all()));
+        $this->assertStringNotContainsString($token, json_encode(session()->all()));
 
         // UM6: akaun sasaran wajib menukar kata laluan sebelum mengakses kawasan dalaman.
         $this->actingAs($target)->get('/dashboard')->assertRedirect(route('password.change'));
@@ -338,20 +357,23 @@ class SuperadminUserManagementTest extends TestCase
         $this->assertSame($hash, $target->fresh()->password);
     }
 
-    public function test_passwords_are_not_recorded_in_audit_or_log(): void
+    public function test_setup_tokens_are_not_recorded_in_audit_or_log(): void
     {
+        Notification::fake();
         config(['audit.console' => true]);
         $logPath = storage_path('logs/laravel.log');
         $logBefore = is_file($logPath) ? (string) file_get_contents($logPath) : '';
 
-        $component = $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'))->call('saveUser');
-        $created = $component->get('temporaryPassword');
+        $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'))->call('saveUser');
         $user = User::where('email', 'aminah@ns.gov.my')->firstOrFail();
+        $created = $this->sentToken($user, isReset: false);
 
-        $reset = Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('resetPassword', $user->uuid)->get('temporaryPassword');
+        Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('resetPassword', $user->uuid);
+        $reset = $this->sentToken($user, isReset: true);
 
         $audits = Audit::where('auditable_type', User::class)->where('auditable_id', $user->id)->get();
         $this->assertGreaterThanOrEqual(2, $audits->count());
+        $this->assertSame(2, $audits->where('event', 'setup_link_sent')->count());
 
         foreach ($audits as $audit) {
             $raw = json_encode($audit->getAttributes());

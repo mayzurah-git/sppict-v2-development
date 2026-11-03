@@ -1,15 +1,4 @@
 <div class="bg-white border border-slate-200 rounded-[14px] overflow-hidden">
-    @php
-        $statusBadges = [
-            'DRAFT' => ['label' => 'Draf', 'class' => 'bg-amber-100 text-amber-800'],
-            'SUBMITTED' => ['label' => 'Dihantar', 'class' => 'bg-blue-100 text-blue-800'],
-            'IN_REVIEW' => ['label' => 'Dalam Semakan', 'class' => 'bg-indigo-100 text-indigo-800'],
-            'NEEDS_AMENDMENT' => ['label' => 'Perlu Pembetulan', 'class' => 'bg-purple-100 text-purple-800'],
-            'APPROVED' => ['label' => 'Lulus', 'class' => 'bg-emerald-100 text-emerald-800'],
-            'REJECTED' => ['label' => 'Ditolak', 'class' => 'bg-red-100 text-red-800'],
-        ];
-    @endphp
-
     <!-- Carian & Tapis Status -->
     <div class="px-5 py-4 flex flex-col sm:flex-row gap-3 border-b border-slate-200">
         <div class="relative flex-1 sm:max-w-sm">
@@ -18,20 +7,23 @@
             <input id="carian-permohonan" type="search" wire:model.live.debounce.300ms="search" placeholder="Cari No. Rujukan / Nama Projek…"
                 class="w-full h-10 pl-[38px] pr-3 text-sm border-slate-300 rounded-[10px] focus:border-green-700 focus:ring-green-700/20">
         </div>
-        {{-- Urus Setia hanya melihat permohonan berstatus Dihantar, jadi tapisan status tidak dipaparkan. --}}
-        @unless ($isUrusSetia)
-            <div class="sm:w-56">
-                <label for="tapis-status" class="sr-only">Tapis status</label>
-                <select id="tapis-status" wire:model.live="statusFilter" class="w-full h-10 text-sm border-slate-300 rounded-[10px] focus:border-green-700 focus:ring-green-700/20">
+        {{-- PP2: Urus Setia menapis satu status pada satu masa (lalai Dihantar = menunggu semakan; tiada Draf). --}}
+        <div class="sm:w-56">
+            <label for="tapis-status" class="sr-only">Tapis status</label>
+            <select id="tapis-status" wire:model.live="statusFilter" class="w-full h-10 text-sm border-slate-300 rounded-[10px] focus:border-green-700 focus:ring-green-700/20">
+                @unless ($isUrusSetia)
                     <option value="">Semua status</option>
-                    <option value="DRAFT">Draf</option>
-                    <option value="SUBMITTED">Dihantar</option>
-                    <option value="NEEDS_AMENDMENT">Perlu Pembetulan</option>
-                    <option value="APPROVED">Lulus</option>
-                    <option value="REJECTED">Ditolak</option>
-                </select>
-            </div>
-        @endunless
+                @endunless
+                {{-- PP1: nilai dalaman ApplicationStatus; keputusan mesyuarat bukan status proses. --}}
+                @foreach ($statusOptions as $option)
+                    <option value="{{ $option->value }}">{{ match (true) {
+                        $isUrusSetia && $option === \App\Enums\ApplicationStatus::Submitted => 'Dihantar (Menunggu Semakan)',
+                        $isUrusSetia && $option === \App\Enums\ApplicationStatus::Draft => 'Draf Saya',
+                        default => $option->label(),
+                    } }}</option>
+                @endforeach
+            </select>
+        </div>
     </div>
 
     <!-- Jadual Senarai Permohonan -->
@@ -69,6 +61,10 @@
                                 <span class="flex flex-col gap-0.5">
                                     <span class="text-xs font-bold tabular-nums sm:hidden">{{ $app->reference_number }}</span>
                                     <span class="font-semibold text-slate-900 break-words">{{ $app->title }}</span>
+                                    {{-- PP3: agensi permohonan (termasuk permohonan bagi pihak agensi) --}}
+                                    @if ($app->agency)
+                                        <span class="text-xs font-semibold text-slate-600" title="{{ $app->agency->name }}">{{ $app->agency->code }}</span>
+                                    @endif
                                     <span class="text-xs text-slate-500 lg:hidden">
                                         {{ $category }}<span class="sm:hidden"> · RM {{ number_format($app->estimated_cost, 2) }}</span>
                                     </span>
@@ -80,8 +76,12 @@
                         <td class="px-4 py-3.5 text-slate-600 {{ $categoryCol }}">{{ $category }}</td>
                         <td class="px-4 py-3.5 text-right tabular-nums whitespace-nowrap {{ $costCol }}">{{ number_format($app->estimated_cost, 2) }}</td>
                         <td class="px-4 py-3.5">
-                            @php($badge = $statusBadges[$app->status] ?? ['label' => $app->status, 'class' => 'bg-gray-100 text-gray-800'])
-                            <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap {{ $badge['class'] }}">{{ $badge['label'] }}</span>
+                            <x-application-status-badge :status="$app->status" />
+                            @if (! $isUrusSetia && $app->statusEnum() === \App\Enums\ApplicationStatus::NeedsAmendment)
+                                <span class="block mt-1 text-[11px] font-semibold text-purple-700">Perlu pindaan &amp; hantar semula</span>
+                            @elseif ($isUrusSetia && $app->was_returned && $app->statusEnum() === \App\Enums\ApplicationStatus::Submitted)
+                                <span class="block mt-1 text-[11px] font-semibold text-blue-700">Dihantar semula selepas pindaan</span>
+                            @endif
                         </td>
                         @unless ($isUrusSetia)
                             <td class="px-4 py-3.5 text-slate-500 whitespace-nowrap tabular-nums">{{ $app->updated_at ? $app->updated_at->format('d/m/Y H:i') : '-' }}</td>

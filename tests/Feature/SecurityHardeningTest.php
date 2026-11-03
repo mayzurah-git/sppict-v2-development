@@ -18,6 +18,7 @@ use App\Models\Grade;
 use App\Models\Position;
 use App\Models\ServiceScheme;
 use App\Models\User;
+use App\Notifications\AccountSetupLink;
 use Database\Seeders\GradeSeeder;
 use Database\Seeders\DemoAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -297,24 +298,27 @@ class SecurityHardeningTest extends TestCase
         $target = User::factory()->create();
         $other = User::factory()->create();
 
+        Notification::fake();
+
         for ($i = 0; $i < 3; $i++) {
             Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $target->uuid)
-                ->assertNotSet('temporaryPassword', null);
+                ->assertDontSee('Terlalu banyak cubaan');
         }
+        Notification::assertSentToTimes($target, AccountSetupLink::class, 3);
 
         $hash = $target->fresh()->password;
-        $blocked = Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $target->uuid)
-            ->assertSet('temporaryPassword', null)
+        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $target->uuid)
             ->assertSee('Terlalu banyak cubaan');
         $this->assertSame($hash, $target->fresh()->password);
+        Notification::assertSentToTimes($target, AccountSetupLink::class, 3);
 
         // Sasaran lain masih boleh direset (operasi pentadbiran biasa tidak tersekat).
-        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $other->uuid)
-            ->assertNotSet('temporaryPassword', null);
+        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $other->uuid);
+        Notification::assertSentToTimes($other, AccountSetupLink::class, 1);
 
         $this->travel(601)->seconds();
-        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $target->uuid)
-            ->assertNotSet('temporaryPassword', null);
+        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $target->uuid);
+        Notification::assertSentToTimes($target, AccountSetupLink::class, 4);
     }
 
     public function test_login_rate_limit_uses_normalised_email(): void

@@ -31,8 +31,10 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user);
 
+        // UM12: Profil mengemas kini telefon, gred & e-mel; nama ialah rujukan sahaja.
         $component = Volt::test('profile.update-profile-information-form')
-            ->set('name', 'Test User')
+            ->set('phone_office', '067659999')
+            ->set('phone_mobile', '0123456789')
             ->set('email', 'test@example.com')
             ->call('updateProfileInformation');
 
@@ -42,7 +44,8 @@ class ProfileTest extends TestCase
 
         $user->refresh();
 
-        $this->assertSame('Test User', $user->name);
+        $this->assertSame('067659999', $user->phone_office);
+        $this->assertSame('0123456789', $user->phone_mobile);
         $this->assertSame('test@example.com', $user->email);
         $this->assertNull($user->email_verified_at);
     }
@@ -54,7 +57,8 @@ class ProfileTest extends TestCase
         $this->actingAs($user);
 
         $component = Volt::test('profile.update-profile-information-form')
-            ->set('name', 'Test User')
+            ->set('phone_office', '067659999')
+            ->set('phone_mobile', '0123456789')
             ->set('email', $user->email)
             ->call('updateProfileInformation');
 

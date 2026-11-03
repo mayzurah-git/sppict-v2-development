@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Enums\ApplicationStatus;
+use App\Enums\DecisionStage;
 use App\Enums\OfficerRole;
 use Illuminate\Database\Eloquent\Builder;
 use OwenIt\Auditing\Contracts\Auditable;
@@ -16,9 +18,13 @@ class Application extends Model implements Auditable
 
     /**
      * Status yang membenarkan pemohon mengemas kini permohonan & dokumen
-     * (Draf / Tidak Lengkap).
+     * (Draf / Tidak Lengkap / Pindaan Pra JTICT). Sumber: ApplicationStatus::editableCases().
      */
-    public const EDITABLE_STATUSES = ['DRAFT', 'NEEDS_AMENDMENT'];
+    public const EDITABLE_STATUSES = [
+        ApplicationStatus::Draft->value,
+        ApplicationStatus::NeedsAmendment->value,
+        ApplicationStatus::PreJtictAmendment->value,
+    ];
 
     public function isEditable(): bool
     {
@@ -26,17 +32,45 @@ class Application extends Model implements Auditable
     }
 
     /**
-     * Mesyuarat JTICT yang akan menerima permohonan ini jika dihantar sekarang.
-     * Permohonan Perlu Pindaan kekal pada mesyuarat asalnya (tidak perlu mesyuarat aktif);
-     * selain itu mesti ada Mesyuarat JTICT yang sedang dibuka.
+     * Status proses sebagai enum; null bagi nilai lama / tidak dikenali (paparan tidak gagal).
+     * `status` sengaja tidak di-cast supaya rekod lama dengan nilai luar senarai masih boleh dibaca.
+     */
+    public function statusEnum(): ?ApplicationStatus
+    {
+        return ApplicationStatus::tryFrom((string) $this->status);
+    }
+
+    public function statusLabel(): string
+    {
+        return ApplicationStatus::labelFor($this->status);
+    }
+
+    /**
+     * Mesyuarat JTICT yang akan menerima permohonan ini jika dihantar sekarang (tanpa pilihan pengguna).
+     *
+     * PP2: permohonan Tidak Lengkap kekal pada mesyuarat asalnya HANYA jika mesyuarat itu masih
+     * menerima permohonan. Jika tidak, null dikembalikan dan pemohon mesti memilih Mesyuarat JTICT
+     * aktif (lihat requiresMeetingSelection()). PP4: peraturan yang sama bagi Pindaan Pra JTICT.
+     * Permohonan lain: Mesyuarat JTICT yang sedang dibuka.
      */
     public function targetJtictMeeting(): ?Meeting
     {
-        if ($this->status === 'NEEDS_AMENDMENT' && $this->jtict_meeting_id) {
-            return $this->jtictMeeting;
+        if ($this->statusEnum()?->isAmendment() && $this->jtict_meeting_id) {
+            return $this->requiresMeetingSelection() ? null : $this->jtictMeeting;
         }
 
         return Meeting::currentJtict();
+    }
+
+    /**
+     * Permohonan Tidak Lengkap / Pindaan Pra JTICT yang mesyuarat asalnya tidak lagi menerima permohonan
+     * (tidak aktif / di luar tempoh / dipadam): pemohon mesti memilih mesyuarat JTICT aktif.
+     */
+    public function requiresMeetingSelection(): bool
+    {
+        return $this->statusEnum()?->isAmendment()
+            && $this->jtict_meeting_id
+            && ! $this->jtictMeeting?->isOpenForSubmission();
     }
 
     /**
@@ -147,6 +181,70 @@ class Application extends Model implements Auditable
     public function details()
     {
         return $this->hasMany(ApplicationDetail::class);
+    }
+
+    /**
+     * PP2: sejarah semakan kelengkapan & penghantaran semula (rekod tidak boleh diubah).
+     */
+    public function reviews()
+    {
+        return $this->hasMany(ApplicationReview::class);
+    }
+
+    /**
+     * PP4: sejarah keputusan Pra JTICT & JTICT (rekod tidak boleh diubah). Sumber rasmi keputusan;
+     * lajur warisan jtict_decision tidak digunakan.
+     */
+    public function decisions()
+    {
+        return $this->hasMany(ApplicationDecision::class);
+    }
+
+    /**
+     * PP4: keputusan Pra JTICT terkini (kitaran Pindaan Pra JTICT boleh menghasilkan beberapa keputusan).
+     */
+    public function latestPreJtictDecision()
+    {
+        return $this->hasOne(ApplicationDecision::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query) => $query->where('stage', DecisionStage::PreJtict->value),
+        );
+    }
+
+    /**
+     * PP4: keputusan JTICT terkini.
+     */
+    public function latestJtictDecision()
+    {
+        return $this->hasOne(ApplicationDecision::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query) => $query->where('stage', DecisionStage::Jtict->value),
+        );
+    }
+
+    /**
+     * PP4: permohonan sumber bagi permohonan salinan (Kaji Semula). `copied_from_application_id`
+     * sengaja tiada dalam $fillable; ditetapkan hanya oleh fungsi Salin Permohonan (fasa akan datang).
+     */
+    public function copiedFromApplication()
+    {
+        return $this->belongsTo(self::class, 'copied_from_application_id')->withTrashed();
+    }
+
+    public function copies()
+    {
+        return $this->hasMany(self::class, 'copied_from_application_id');
+    }
+
+    /**
+     * Keputusan Tidak Lengkap terkini (ulasan yang perlu ditangani oleh pemohon).
+     */
+    public function latestAmendmentReview()
+    {
+        return $this->hasOne(ApplicationReview::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query) => $query->where('to_status', ApplicationStatus::NeedsAmendment->value),
+        );
     }
 
     /**

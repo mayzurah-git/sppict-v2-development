@@ -5,7 +5,31 @@
     </div>
 
     <!-- STATUS MESYUARAT JTICT -->
-    @include('livewire.partials.jtict-status', ['meeting' => $this->targetMeeting])
+    @if ($this->requiresMeetingSelection)
+        {{-- PP2: mesyuarat asal permohonan Tidak Lengkap tidak lagi dibuka; pemohon mesti memilih mesyuarat aktif --}}
+        @if ($this->eligibleMeetings->isNotEmpty())
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-2">
+                <p class="font-bold">↺ Pilih Mesyuarat JTICT untuk penghantaran semula</p>
+                <p>Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan. Sila pilih Mesyuarat JTICT yang sedang dibuka.</p>
+                <x-form.select label="Mesyuarat JTICT" wire:model.live="resubmissionMeetingId" :error="$errors->first('resubmissionMeetingId')" required>
+                    <option value="">-- Pilih Mesyuarat JTICT --</option>
+                    @foreach ($this->eligibleMeetings as $meeting)
+                        <option value="{{ $meeting->id }}">{{ $meeting->label() }} (tutup {{ $meeting->submission_closes_at->format('d/m/Y') }})</option>
+                    @endforeach
+                </x-form.select>
+            </div>
+        @else
+            <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <p class="font-bold">⏸ Tiada Mesyuarat JTICT aktif untuk penghantaran semula</p>
+                <p class="mt-0.5">Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan dan tiada Mesyuarat JTICT lain yang dibuka. Anda boleh menyimpan pindaan dan menghantar semula apabila Mesyuarat JTICT dibuka oleh Urus Setia.</p>
+            </div>
+        @endif
+    @else
+        @if ($this->isAmendment && $this->targetMeeting)
+            <p class="text-xs font-semibold text-blue-800">↺ Penghantaran semula pindaan ke mesyuarat asal permohonan.</p>
+        @endif
+        @include('livewire.partials.jtict-status', ['meeting' => $this->targetMeeting])
+    @endif
 
     <!-- RINGKASAN KOS (SEMAKAN AKHIR) -->
     @php($summary = $form->costSummary())

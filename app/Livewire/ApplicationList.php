@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Livewire\WithPagination;
+use App\Enums\ApplicationStatus;
 use App\Models\Application;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,6 +14,13 @@ class ApplicationList extends Component
 
     public string $search = '';
     public string $statusFilter = '';
+
+    public function mount(): void
+    {
+        if (Auth::user()?->hasRole('pentadbir_urus_setia')) {
+            $this->statusFilter = ApplicationStatus::Submitted->value;
+        }
+    }
 
     public function updatingSearch()
     {
@@ -29,10 +37,22 @@ class ApplicationList extends Component
         $user = Auth::user();
         $isUrusSetia = $user->hasRole('pentadbir_urus_setia');
 
+        // Penapis menggunakan nilai dalaman enum; nilai tidak sah (cth. label lama) diabaikan.
+        $statusFilter = ApplicationStatus::tryFrom($this->statusFilter);
+
+        // PP2: Urus Setia melihat satu status pada satu masa (lalai: Dihantar = menunggu semakan).
+        // Draf milik pemohon lain tidak dipaparkan kepada Urus Setia; PP3: pilihan Draf hanya
+        // memaparkan draf yang didaftarkan oleh Urus Setia itu sendiri (cth. bagi pihak agensi).
+        $urusSetiaOptions = ApplicationStatus::cases();
+        $urusSetiaStatus = in_array($statusFilter, $urusSetiaOptions, true) ? $statusFilter : ApplicationStatus::Submitted;
+
         $applications = Application::query()
-            ->with('applicationCategoryMaster')
-            ->when($isUrusSetia, function ($query) {
-                $query->where('status', 'SUBMITTED');
+            ->with(['applicationCategoryMaster', 'agency:id,code,name'])
+            ->when($isUrusSetia, function ($query) use ($urusSetiaStatus, $user) {
+                $query->where('status', $urusSetiaStatus->value)
+                    ->when($urusSetiaStatus === ApplicationStatus::Draft, fn ($drafts) => $drafts->where('applicant_id', $user->id))
+                    // "Dihantar semula": pernah ditetapkan Tidak Lengkap sebelum ini
+                    ->withExists(['reviews as was_returned' => fn ($review) => $review->where('to_status', ApplicationStatus::NeedsAmendment->value)]);
             }, function ($query) use ($user) {
                 // Permohonan sendiri, atau projek yang dipertanggungjawabkan (termasuk yang diambil alih)
                 $query->where(function ($q) use ($user) {
@@ -46,8 +66,8 @@ class ApplicationList extends Component
                       ->orWhere('title', 'like', '%' . $this->search . '%');
                 });
             })
-            ->when($this->statusFilter && ! $isUrusSetia, function ($query) {
-                $query->where('status', $this->statusFilter);
+            ->when($statusFilter && ! $isUrusSetia, function ($query) use ($statusFilter) {
+                $query->where('status', $statusFilter->value);
             })
             ->latest()
             ->paginate(10);
@@ -55,6 +75,7 @@ class ApplicationList extends Component
         return view('livewire.application-list', [
             'applications' => $applications,
             'isUrusSetia' => $isUrusSetia,
+            'statusOptions' => $isUrusSetia ? $urusSetiaOptions : ApplicationStatus::cases(),
         ]);
     }
 }

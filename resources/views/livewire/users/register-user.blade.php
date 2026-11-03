@@ -2,24 +2,38 @@
     <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div>
             <h2 class="text-xl font-black text-slate-900">Daftar Pengguna</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Pendaftaran akaun oleh Urus Setia. Akaun terus aktif dengan kata laluan sementara yang wajib ditukar.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Pendaftaran akaun oleh Urus Setia. Akaun terus aktif dan pautan Tetapkan Kata Laluan dihantar ke e-mel pengguna.</p>
         </div>
         <a href="{{ route('users.requests') }}" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
             Permohonan Pendaftaran
         </a>
     </div>
 
-    @if ($temporaryPassword)
+    @if (session()->has('error'))
+        <div class="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-r-xl">{{ session('error') }}</div>
+    @endif
+
+    @if ($setupLinkSent === true)
         <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3" role="alert">
             <p class="text-sm font-bold text-emerald-800">Akaun {{ $createdUserName }} berjaya didaftarkan.</p>
-            <div class="text-xs text-emerald-900 space-y-1">
-                <p>Kata laluan sementara (dipaparkan <strong>sekali sahaja</strong>):</p>
-                <p class="inline-block font-mono text-base tracking-wider bg-white border border-emerald-300 rounded-lg px-3 py-1.5 select-all">{{ $temporaryPassword }}</p>
-                <p>Sampaikan kata laluan ini kepada pengguna secara selamat. Pengguna wajib menukar kata laluan selepas log masuk pertama.</p>
-            </div>
-            <button type="button" wire:click="dismissTemporaryPassword" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
-                Saya telah merekodkan kata laluan ini
+            <p class="text-xs text-emerald-900">Pautan Tetapkan Kata Laluan telah dihantar ke <strong>{{ $createdUserEmail }}</strong>. Pautan sah selama 72 jam.</p>
+            <button type="button" wire:click="dismissSetupStatus" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
+                Tutup
             </button>
+        </div>
+    @elseif ($setupLinkSent === false)
+        <div class="p-5 bg-red-50 border border-red-200 rounded-2xl space-y-3" role="alert">
+            <p class="text-sm font-bold text-red-800">Akaun {{ $createdUserName }} berjaya didaftarkan, tetapi e-mel gagal dihantar.</p>
+            <p class="text-xs text-red-900">Pautan Tetapkan Kata Laluan tidak dapat dihantar ke <strong>{{ $createdUserEmail }}</strong>. Sila semak alamat e-mel dan cuba Jana Semula.</p>
+            <div class="flex gap-2">
+                <button type="button" wire:click="resendSetupLink('{{ $createdUserUuid }}')" wire:loading.attr="disabled" wire:target="resendSetupLink"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition">
+                    🔄 Jana Semula Pautan
+                </button>
+                <button type="button" wire:click="dismissSetupStatus" class="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition">
+                    Tutup
+                </button>
+            </div>
         </div>
     @endif
 

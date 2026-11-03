@@ -10,20 +10,6 @@
         </button>
     </div>
 
-    @if ($temporaryPassword)
-        <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3" role="alert">
-            <p class="text-sm font-bold text-emerald-800">Kata laluan sementara bagi {{ $temporaryPasswordFor }}</p>
-            <div class="text-xs text-emerald-900 space-y-1">
-                <p>Dipaparkan <strong>sekali sahaja</strong>:</p>
-                <p class="inline-block font-mono text-base tracking-wider bg-white border border-emerald-300 rounded-lg px-3 py-1.5 select-all">{{ $temporaryPassword }}</p>
-                <p>Sampaikan kata laluan ini kepada pengguna secara selamat. Pengguna wajib menukar kata laluan selepas log masuk.</p>
-            </div>
-            <button type="button" wire:click="dismissTemporaryPassword" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
-                Saya telah merekodkan kata laluan ini
-            </button>
-        </div>
-    @endif
-
     @if (session()->has('message'))
         <div class="p-4 bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700 text-xs rounded-r-xl">
             {{ session('message') }}
@@ -102,7 +88,7 @@
                             <td class="p-3.5 text-center">
                                 @include('livewire.partials.user-status-badge', ['user' => $user])
                                 @if ($user->must_change_password)
-                                    <span class="block mt-1 text-[9px] text-amber-600">Kata laluan sementara</span>
+                                    <span class="block mt-1 text-[9px] text-amber-600">Belum tetapkan kata laluan</span>
                                 @endif
                             </td>
                             <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
@@ -110,7 +96,7 @@
                                     ✏️ Edit
                                 </button>
                                 <button wire:click="resetPassword('{{ $user->uuid }}')" wire:loading.attr="disabled"
-                                    wire:confirm="Set semula kata laluan {{ $user->name }}? Kata laluan sementara baharu akan dijana dan pengguna wajib menukarnya."
+                                    wire:confirm="Set semula kata laluan {{ $user->name }}? Kata laluan semasa dibatalkan dan pautan Tetapkan Kata Laluan dihantar ke e-mel pengguna."
                                     class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg font-bold text-xs transition">
                                     🔑 Reset Pass
                                 </button>
@@ -217,7 +203,7 @@
                 </div>
 
                 @unless ($userUuid)
-                    <p class="text-[11px] text-slate-500">Kata laluan sementara akan dijana secara automatik dan dipaparkan sekali selepas akaun didaftarkan.</p>
+                    <p class="text-[11px] text-slate-500">Pautan Tetapkan Kata Laluan (sah 72 jam) akan dihantar ke e-mel pengguna selepas akaun didaftarkan.</p>
                 @endunless
 
                 <div class="flex justify-end space-x-2 pt-4 border-t">

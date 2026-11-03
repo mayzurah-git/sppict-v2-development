@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\ApplicationStatus;
 use App\Enums\OfficerRole;
 use App\Models\Agency;
 use App\Models\Application;
 use App\Models\ApplicationCategory;
 use App\Models\ApplicationDetail;
 use App\Models\ApplicationDocument;
+use App\Models\ApplicationReview;
 use App\Models\ApplicationOfficer;
 use App\Models\Meeting;
 use App\Models\ProcurementMethod;
@@ -39,28 +41,45 @@ class ApplicationSubmissionService
      * Hantar permohonan kepada Urus Setia. Jika permohonan ini berasal daripada draf
      * (atau berstatus Tidak Lengkap), rekod yang sama dikemas kini.
      *
-     * Permohonan hanya boleh dihantar ketika ada Mesyuarat JTICT yang dibuka (kecuali
-     * Perlu Pindaan, yang kekal pada mesyuarat asal). Jika tempoh telah ditutup,
-     * permohonan disimpan sebagai draf supaya tiada data hilang.
+     * Permohonan hanya boleh dihantar ketika ada Mesyuarat JTICT yang dibuka. PP2: permohonan
+     * Tidak Lengkap kekal pada mesyuarat asal jika mesyuarat itu masih dibuka; jika tidak, pemohon
+     * mesti memilih Mesyuarat JTICT aktif ($selectedMeetingId, disahkan semula di sini). Jika tiada
+     * mesyuarat yang layak, perubahan disimpan (Draf kekal Draf, Tidak Lengkap kekal Tidak Lengkap).
      *
-     * @throws SubmissionClosedException  tiada Mesyuarat JTICT aktif; permohonan telah disimpan sebagai draf
+     * PP3: $targetAgencyId ialah agensi sasaran bagi permohonan baharu oleh Urus Setia (lihat resolveApplication).
+     *
+     * @throws SubmissionClosedException  tiada Mesyuarat JTICT aktif; perubahan telah disimpan tanpa dihantar
+     * @throws ValidationException  mesyuarat untuk penghantaran semula / agensi sasaran tidak dipilih atau tidak sah
      * @throws \Exception
      */
-    public function submit(ApplicationForm $form, $user, ?int $applicationId = null): Application
+    public function submit(ApplicationForm $form, $user, ?int $applicationId = null, ?int $selectedMeetingId = null, ?int $targetAgencyId = null): Application
     {
         $closed = false;
 
-        $application = DB::transaction(function () use ($form, $user, $applicationId, &$closed) {
-            $application = $this->resolveApplication($user, $applicationId);
+        $application = DB::transaction(function () use ($form, $user, $applicationId, $selectedMeetingId, $targetAgencyId, &$closed) {
+            $application = $this->resolveApplication($user, $applicationId, $targetAgencyId);
+            $previousStatus = $application->exists ? $application->status : null;
 
             // Semak semula di pelayan; kunci rekod mesyuarat supaya tidak ditutup serentak
-            $meeting = $application->targetJtictMeeting();
+            $meeting = $this->resolveSubmissionMeeting($application, $selectedMeetingId);
             $meeting = $meeting ? Meeting::lockForUpdate()->find($meeting->id) : null;
+
+            if ($meeting && ! $meeting->isOpenForSubmission()) {
+                $meeting = null;
+            }
 
             if (! $meeting) {
                 $closed = true;
 
                 return $this->persistDraft($application, $form, $user);
+            }
+
+            // PP1: hanya Draf / Tidak Lengkap boleh beralih kepada Dihantar (penghantaran semula
+            // selepas pindaan menggunakan status Dihantar yang sama; ia tidak menjadi Lengkap secara automatik).
+            $current = $application->exists ? ApplicationStatus::tryFrom((string) $application->status) : ApplicationStatus::Draft;
+
+            if (! $current?->canTransitionTo(ApplicationStatus::Submitted)) {
+                throw new AuthorizationException('Permohonan ini tidak boleh dihantar pada status semasa.');
             }
 
             // Draf menerima nombor rujukan rasmi semasa dihantar
@@ -69,13 +88,26 @@ class ApplicationSubmissionService
             }
 
             $this->fillApplication($application, $form);
-            $application->status = 'SUBMITTED';
+            $application->status = ApplicationStatus::Submitted->value;
             $application->jtict_meeting_id = $meeting->id;
             $application->save();
 
             $this->syncOfficers($application, $form, $user, submitting: true);
             $this->syncDetails($application, $form);
             $this->storeDocuments($application, $form);
+
+            // PP2: penghantaran semula selepas Tidak Lengkap direkodkan dalam sejarah semakan.
+            // PP4: begitu juga selepas Pindaan Pra JTICT (permohonan kemudian disemak semula melalui PP2).
+            if (ApplicationStatus::tryFrom((string) $previousStatus)?->isAmendment()) {
+                ApplicationReview::create([
+                    'application_id' => $application->id,
+                    'from_status' => $previousStatus,
+                    'to_status' => ApplicationStatus::Submitted->value,
+                    'remarks' => null,
+                    'user_id' => $user->id,
+                    'jtict_meeting_id' => $meeting->id,
+                ]);
+            }
 
             Log::info("Permohonan berjaya dihantar: {$application->reference_number} ke {$meeting->label()} oleh ID Pemohon {$user->id}");
 
@@ -90,19 +122,44 @@ class ApplicationSubmissionService
     }
 
     /**
+     * Mesyuarat JTICT sasaran. Bagi permohonan Tidak Lengkap yang mesyuarat asalnya tidak lagi
+     * dibuka, pilihan pemohon mesti salah satu Mesyuarat JTICT yang sedang dibuka; null jika tiada
+     * mesyuarat yang layak (penghantaran disekat).
+     *
+     * @throws ValidationException
+     */
+    private function resolveSubmissionMeeting(Application $application, ?int $selectedMeetingId): ?Meeting
+    {
+        if (! $application->requiresMeetingSelection()) {
+            return $application->targetJtictMeeting();
+        }
+
+        $eligible = Meeting::jtict()->openForSubmission()->get();
+
+        if ($eligible->isEmpty()) {
+            return null;
+        }
+
+        return $eligible->firstWhere('id', (int) $selectedMeetingId)
+            ?? throw ValidationException::withMessages([
+                'resubmissionMeetingId' => 'Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan. Sila pilih Mesyuarat JTICT aktif untuk penghantaran semula.',
+            ]);
+    }
+
+    /**
      * Menyimpan atau mengemas kini permohonan sebagai DRAF.
      * Permohonan berstatus Tidak Lengkap kekal dengan statusnya.
      */
-    public function saveDraft(ApplicationForm $form, $user, ?int $applicationId = null): Application
+    public function saveDraft(ApplicationForm $form, $user, ?int $applicationId = null, ?int $targetAgencyId = null): Application
     {
-        return DB::transaction(fn () => $this->persistDraft($this->resolveApplication($user, $applicationId), $form, $user));
+        return DB::transaction(fn () => $this->persistDraft($this->resolveApplication($user, $applicationId, $targetAgencyId), $form, $user));
     }
 
     private function persistDraft(Application $application, ApplicationForm $form, $user): Application
     {
         if (! $application->exists) {
             $application->reference_number = $this->nextReferenceNumber(isDraft: true);
-            $application->status = 'DRAFT';
+            $application->status = ApplicationStatus::Draft->value;
         }
 
         $this->fillApplication($application, $form);
@@ -117,8 +174,13 @@ class ApplicationSubmissionService
 
     /**
      * Dapatkan permohonan sedia ada (dengan semakan kebenaran) atau sediakan rekod baharu.
+     *
+     * Semantik (PP3): `applicant_id` ialah pengguna yang mendaftar & bertanggungjawab ke atas rekod
+     * (boleh meminda semasa Draf/Tidak Lengkap); `agency_id` ialah agensi permohonan. Bagi Urus Setia,
+     * agensi ialah agensi sasaran yang dipilih; bagi pengguna lain, agensi akaun sendiri.
+     * Agensi ditetapkan sekali semasa rekod dicipta dan tidak diubah selepas itu.
      */
-    private function resolveApplication($user, ?int $applicationId): Application
+    private function resolveApplication($user, ?int $applicationId, ?int $targetAgencyId = null): Application
     {
         if (! $applicationId) {
             // UM7A: kebenaran disemak semula di backend (bukan hanya route/komponen).
@@ -128,10 +190,17 @@ class ApplicationSubmissionService
 
             return new Application([
                 'uuid' => (string) Str::uuid(),
-                // UM7A: tiada fallback agensi tetap; agensi pemohon mesti wujud dan aktif.
-                'agency_id' => $this->applicantAgencyId($user),
+                // UM7A: tiada fallback agensi tetap; agensi mesti wujud dan aktif.
+                'agency_id' => $user->can('createOnBehalf', Application::class)
+                    ? $this->targetAgencyId($targetAgencyId)
+                    : $this->applicantAgencyId($user, $targetAgencyId),
                 'applicant_id' => $user->id,
             ]);
+        }
+
+        // PP3: agensi rekod sedia ada tidak boleh ditukar melalui payload
+        if ($targetAgencyId !== null) {
+            throw new AuthorizationException('Agensi permohonan tidak boleh diubah selepas didaftarkan.');
         }
 
         $application = Application::lockForUpdate()->findOrFail($applicationId);
@@ -147,10 +216,16 @@ class ApplicationSubmissionService
      * Agensi pemohon untuk permohonan baharu. Proses dihentikan jika pemohon tiada agensi
      * atau agensinya tidak aktif / telah dipadam (rekod pengguna tidak diubah).
      *
-     * @throws ValidationException
+     * PP3: pengguna yang tidak dibenarkan memohon bagi pihak agensi lain tidak boleh menghantar agensi sasaran.
+     *
+     * @throws AuthorizationException|ValidationException
      */
-    private function applicantAgencyId($user): int
+    private function applicantAgencyId($user, ?int $targetAgencyId = null): int
     {
+        if ($targetAgencyId !== null) {
+            throw new AuthorizationException('Anda tidak dibenarkan mendaftar permohonan bagi pihak agensi lain.');
+        }
+
         $agencyId = $user->agency_id;
 
         if (! $agencyId || ! Agency::active()->whereKey($agencyId)->exists()) {
@@ -160,6 +235,22 @@ class ApplicationSubmissionService
         }
 
         return (int) $agencyId;
+    }
+
+    /**
+     * PP3: agensi sasaran bagi permohonan Urus Setia. Wajib dipilih; mesti wujud, aktif dan tidak dipadam.
+     *
+     * @throws ValidationException
+     */
+    private function targetAgencyId(?int $targetAgencyId): int
+    {
+        if (! $targetAgencyId || ! Agency::active()->whereKey($targetAgencyId)->exists()) {
+            throw ValidationException::withMessages([
+                'targetAgencyId' => 'Sila pilih Jabatan/Agensi sasaran yang sah dan aktif sebelum menyimpan permohonan.',
+            ]);
+        }
+
+        return $targetAgencyId;
     }
 
     /**

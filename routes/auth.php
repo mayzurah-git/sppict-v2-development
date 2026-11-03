@@ -20,6 +20,10 @@ Route::middleware('guest')->group(function () {
 
     Volt::route('reset-password/{token}', 'pages.auth.reset-password')
         ->name('password.reset');
+
+    // UM13: Tetapkan Kata Laluan bagi akaun yang didaftar / diset semula oleh pentadbir.
+    Volt::route('tetapkan-kata-laluan/{token}', 'pages.auth.setup-password')
+        ->name('password.setup');
 });
 
 // Tukar kata laluan sementara (UM6): satu-satunya halaman dalaman yang dibenarkan semasa

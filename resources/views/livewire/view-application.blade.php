@@ -4,17 +4,55 @@
         <div>
             <div class="flex items-center space-x-2">
                 <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">{{ $application->reference_number }}</span>
+                <x-application-status-badge :status="$application->status" />
                 <span class="text-xs text-slate-400">• Dihantar pada {{ $application->created_at ? $application->created_at->format('d/m/Y h:i A') : '-' }}</span>
                 @if ($application->jtictMeeting)
                     <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md">{{ $application->jtictMeeting->label() }}</span>
                 @endif
             </div>
             <h2 class="text-xl font-black text-slate-800 mt-2">{{ $application->title }}</h2>
+            {{-- PP3: agensi permohonan dan pengguna yang mendaftar rekod (applicant_id) dipaparkan berasingan --}}
+            <dl class="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                <div class="flex gap-1"><dt class="text-slate-400">Jabatan/Agensi:</dt><dd class="font-semibold text-slate-700">{{ $application->agency ? $application->agency->name . ' (' . $application->agency->code . ')' : '-' }}</dd></div>
+                <div class="flex gap-1"><dt class="text-slate-400">Didaftarkan oleh:</dt><dd class="font-semibold text-slate-700">{{ $application->applicant?->name ?? '-' }}</dd></div>
+                <div class="flex gap-1"><dt class="text-slate-400">Pegawai Utama:</dt><dd class="font-semibold text-slate-700">{{ $this->officerHistory->whereNull('ended_at')->first(fn ($officer) => $officer->role === \App\Enums\OfficerRole::Primary)?->name ?? '-' }}</dd></div>
+            </dl>
         </div>
         <a href="{{ url('/dashboard') }}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
             ← Kembali ke Dashboard
         </a>
     </div>
+
+    <!-- PP2: Semakan Kelengkapan -->
+    @if (session()->has('review_message'))
+        <div class="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold rounded-xl">{{ session('review_message') }}</div>
+    @endif
+    @if (session()->has('review_error'))
+        <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl">{{ session('review_error') }}</div>
+    @endif
+
+    @can('review', $application)
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-blue-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-slate-800">Semakan Kelengkapan</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Teliti maklumat dan dokumen permohonan di bawah sebelum membuat keputusan. "Lengkap" bukan keputusan kelulusan mesyuarat.</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                <button type="button" wire:click="openReviewModal('NEEDS_AMENDMENT')" class="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold rounded-xl transition">Tandakan Tidak Lengkap</button>
+                <button type="button" wire:click="openReviewModal('COMPLETE')" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 text-white text-xs font-bold rounded-xl transition">Tandakan Lengkap</button>
+            </div>
+        </div>
+    @endcan
+
+    @if ($this->amendmentRemarks)
+        <div class="p-4 bg-purple-50 border-l-4 border-purple-500 text-purple-900 text-xs rounded-xl space-y-2">
+            <p class="font-bold">Permohonan ini Tidak Lengkap. Ulasan Urus Setia:</p>
+            <p class="whitespace-pre-line">{{ $this->amendmentRemarks }}</p>
+            @can('update', $application)
+                <a href="{{ route('application.edit', $application->uuid) }}" class="inline-flex px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl transition">Kemas Kini &amp; Hantar Semula</a>
+            @endcan
+        </div>
+    @endif
 
     <!-- Ringkasan Fasa 1 & 2 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -139,7 +177,7 @@
                         <p class="text-[11px] text-slate-400">{{ $role->label() }}</p>
                         @if ($canManageOfficers)
                             <button type="button" wire:click="openHandoverModal('{{ $role->value }}')" class="px-2.5 py-1 bg-amber-50 text-amber-700 font-bold rounded-lg hover:bg-amber-100 transition text-[11px]">
-                                {{ $officer ? '⇄ Tukar Pegawai' : '+ Lantik Pegawai' }}
+                                {{ $officer ? '⇄ Kemaskini Pegawai' : '+ Tambah Pegawai' }}
                             </button>
                         @endif
                     </div>
@@ -213,6 +251,69 @@
         </div>
     @endif
 
+    <!-- PP2: Sejarah Semakan (terkini dahulu). Nama individu hanya dipaparkan kepada Urus Setia. -->
+    @if ($this->reviews->isNotEmpty())
+        @php($showActorNames = auth()->user()->hasRole('pentadbir_urus_setia'))
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2">Sejarah Semakan</h3>
+            <ol class="space-y-3">
+                @foreach ($this->reviews as $review)
+                    <li wire:key="review-{{ $review->id }}" class="text-xs p-3 rounded-xl {{ $loop->first ? 'bg-slate-50 border border-slate-200' : '' }}">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-bold text-slate-800">{{ $review->actionLabel() }}</span>
+                            @if ($loop->first)
+                                <span class="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded-full text-[10px]">Terkini</span>
+                            @endif
+                            <span class="text-slate-400">{{ $review->created_at->format('d/m/Y h:i A') }}</span>
+                            <span class="text-slate-500">• {{ $review->actorRoleLabel() }}{{ $showActorNames && $review->user ? ': ' . $review->user->name : '' }}</span>
+                        </div>
+                        @if ($review->remarks)
+                            <p class="mt-1 text-slate-700 whitespace-pre-line">{{ $review->remarks }}</p>
+                        @endif
+                    </li>
+                @endforeach
+            </ol>
+        </div>
+    @endif
+
+    <!-- PP2: Modal Pengesahan Semakan -->
+    @if ($showReviewModal)
+        @php($isIncomplete = $reviewDecision === \App\Enums\ApplicationStatus::NeedsAmendment->value)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                <h3 class="text-base font-bold text-slate-800 border-b pb-2">{{ $isIncomplete ? 'Tandakan Tidak Lengkap' : 'Tandakan Lengkap' }}</h3>
+                <p class="text-xs text-slate-600">
+                    {{ $application->reference_number }} — {{ $application->title }}
+                </p>
+
+                <div>
+                    <label for="review-remarks" class="block text-xs font-medium text-gray-700">
+                        Ulasan Semakan @if ($isIncomplete)<span class="text-red-500">*</span>@else<span class="text-slate-400">(pilihan)</span>@endif
+                    </label>
+                    <textarea id="review-remarks" wire:model="reviewRemarks" rows="5" maxlength="{{ \App\Services\ApplicationReviewService::REMARKS_MAX }}" class="mt-1 block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="{{ $isIncomplete ? 'Nyatakan maklumat, dokumen atau bahagian yang perlu dipinda atau ditambah baik.' : 'Catatan tambahan (jika ada).' }}"></textarea>
+                    @error('reviewRemarks') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span> @enderror
+                </div>
+
+                <p class="text-[11px] text-slate-500">
+                    @if ($isIncomplete)
+                        Permohonan akan dikembalikan kepada pemohon untuk pindaan. Pemohon dan Pegawai Utama akan dimaklumkan melalui e-mel. Keputusan ini direkodkan dalam sejarah semakan dan tidak boleh diubah.
+                    @else
+                        Permohonan akan ditetapkan sebagai Lengkap dan menunggu proses Pra JTICT. Ini bukan keputusan kelulusan. Keputusan ini direkodkan dalam sejarah semakan dan tidak boleh diubah.
+                    @endif
+                </p>
+
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" wire:click="closeReviewModal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">Batal</button>
+                    <button type="button" wire:click="submitReview" wire:loading.attr="disabled" wire:target="submitReview" class="px-4 py-2 {{ $isIncomplete ? 'bg-purple-700 hover:bg-purple-800' : 'bg-cyan-700 hover:bg-cyan-800' }} text-white text-xs font-bold rounded-xl transition disabled:opacity-50">
+                        <span wire:loading.remove wire:target="submitReview">Sahkan Keputusan</span>
+                        <span wire:loading wire:target="submitReview">Menyimpan...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- Modal Tukar Pegawai Bertanggungjawab -->
     @if ($showHandoverModal)
         @php($handoverRoleEnum = \App\Enums\OfficerRole::from($handoverRole))
@@ -220,7 +321,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
                 <h3 class="text-base font-bold text-slate-800 border-b pb-2">
-                    {{ $currentOfficer ? 'Tukar' : 'Lantik' }} {{ $handoverRoleEnum->label() }}
+                    {{ $currentOfficer ? 'Kemaskini' : 'Tambah' }} {{ $handoverRoleEnum->label() }}
                 </h3>
 
                 @if ($currentOfficer)

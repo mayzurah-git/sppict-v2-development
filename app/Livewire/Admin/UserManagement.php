@@ -7,6 +7,7 @@ use App\Livewire\Concerns\HandlesUserDeactivation;
 use App\Livewire\Concerns\HandlesUserProfileFields;
 use App\Livewire\Concerns\RateLimitsActions;
 use App\Models\User;
+use App\Support\AccountSetupLinkSender;
 use App\Support\RoleChangeAudit;
 use App\Support\TemporaryPassword;
 use Illuminate\Support\Facades\DB;
@@ -24,10 +25,10 @@ use Livewire\WithPagination;
  * - Daftar akaun Urus Setia / Superadmin dengan master data (trait dikongsi dengan UM2/UM4).
  * - Kemas kini profil & peranan pengguna sedia ada: mana-mana 4 peranan (UM10), kecuali menukar
  *   Superadmin aktif terakhir. Perubahan peranan diaudit (`role_updated`).
- * - Reset kata laluan: kata laluan sementara rawak + `must_change_password` (dikuatkuasakan UM6).
+ * - Reset kata laluan: kata laluan lama diganti dengan nilai rawak + `must_change_password`.
  *
- * Kata laluan sementara dipaparkan sekali melalui property `#[Locked]`, tidak disimpan dalam
- * session (SESSION_ENCRYPT=false), log atau audit.
+ * UM13: kata laluan tidak lagi dipaparkan. Daftar & reset menghantar pautan "Tetapkan Kata Laluan"
+ * melalui e-mel; jika e-mel gagal, Superadmin boleh menekan Reset sekali lagi.
  */
 class UserManagement extends Component
 {
@@ -63,12 +64,6 @@ class UserManagement extends Component
     public ?string $userUuid = null;
 
     public string $role = '';
-
-    #[Locked]
-    public ?string $temporaryPassword = null;
-
-    #[Locked]
-    public ?string $temporaryPasswordFor = null;
 
     public function mount(): void
     {
@@ -147,11 +142,10 @@ class UserManagement extends Component
             }
         }
 
-        $temporaryPassword = TemporaryPassword::generate(12);
-
-        DB::transaction(function () use ($user, $temporaryPassword): void {
+        DB::transaction(function () use ($user): void {
             $user->forceFill([
-                'password' => Hash::make($temporaryPassword),
+                // Kata laluan lama dibatalkan; nilai rawak tidak didedahkan kepada sesiapa.
+                'password' => Hash::make(TemporaryPassword::generate(32)),
                 'must_change_password' => true,
                 // Batalkan sesi "Ingat saya" sedia ada.
                 'remember_token' => Str::random(60),
@@ -162,29 +156,22 @@ class UserManagement extends Component
             RateLimiter::hit($key, 600);
         }
 
-        // Dipaparkan hanya selepas transaksi berjaya.
-        $this->showTemporaryPassword($temporaryPassword, $user->name);
-    }
-
-    /**
-     * Tutup paparan kata laluan sementara; ia tidak boleh dipaparkan semula.
-     */
-    public function dismissTemporaryPassword(): void
-    {
-        $this->temporaryPassword = null;
-        $this->temporaryPasswordFor = null;
+        if (AccountSetupLinkSender::send($user, isReset: true)) {
+            session()->flash('message', "Kata laluan {$user->name} telah diset semula. Pautan Tetapkan Kata Laluan dihantar ke {$user->email}.");
+        } else {
+            session()->flash('error', "Kata laluan {$user->name} telah diset semula, tetapi e-mel gagal dihantar ke {$user->email}. Sila tekan Reset sekali lagi.");
+        }
     }
 
     protected function createUser(array $validated): void
     {
-        $temporaryPassword = TemporaryPassword::generate(12);
-
-        $user = DB::transaction(function () use ($validated, $temporaryPassword): User {
+        $user = DB::transaction(function () use ($validated): User {
             $user = new User();
             $user->fill($this->profileAttributesForSave($validated) + [
-                'password' => Hash::make($temporaryPassword),
+                // Kata laluan rawak yang tidak didedahkan; pengguna menetapkan sendiri melalui pautan e-mel.
+                'password' => Hash::make(TemporaryPassword::generate(32)),
             ]);
-            // Selaras dengan UM4: akaun didaftar pentadbir terus aktif, kata laluan sementara wajib ditukar.
+            // Selaras dengan UM4: akaun didaftar pentadbir terus aktif, kata laluan perlu ditetapkan oleh pengguna.
             $user->forceFill([
                 'status' => UserStatus::Active,
                 'must_change_password' => true,
@@ -195,8 +182,12 @@ class UserManagement extends Component
         });
 
         $this->closeModal();
-        $this->showTemporaryPassword($temporaryPassword, $user->name);
-        session()->flash('message', "Pengguna {$user->name} berjaya didaftarkan.");
+
+        if (AccountSetupLinkSender::send($user)) {
+            session()->flash('message', "Pengguna {$user->name} berjaya didaftarkan. Pautan Tetapkan Kata Laluan dihantar ke {$user->email}.");
+        } else {
+            session()->flash('error', "Pengguna {$user->name} berjaya didaftarkan, tetapi e-mel gagal dihantar ke {$user->email}. Sila tekan Reset untuk menjana semula pautan.");
+        }
     }
 
     protected function updateUser(User $user, array $validated): void
@@ -235,12 +226,6 @@ class UserManagement extends Component
         }
 
         $this->closeModal();
-    }
-
-    protected function showTemporaryPassword(string $password, string $name): void
-    {
-        $this->temporaryPassword = $password;
-        $this->temporaryPasswordFor = $name;
     }
 
     /**

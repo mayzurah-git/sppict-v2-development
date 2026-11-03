@@ -4,6 +4,8 @@ namespace App\Livewire\Users;
 
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Notifications\RegistrationApproved;
+use App\Notifications\RegistrationRejected;
 use App\Support\RoleChangeAudit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -16,7 +18,7 @@ use Livewire\WithPagination;
  * UM4: Semakan permohonan Self Register oleh Urus Setia (lulus / tolak).
  *
  * Tindakan hanya sah bagi rekod berstatus `pending`; rekod tidak dipadam. Perubahan status
- * direkodkan oleh audit model User (OwenIt).
+ * direkodkan oleh audit model User (OwenIt). Pemohon dimaklumkan keputusan melalui e-mel.
  */
 #[Layout('layouts.app')]
 class RegistrationRequests extends Component
@@ -127,6 +129,11 @@ class RegistrationRequests extends Component
                 $this->auditApproval($applicant, $previousRoles, $approvedRole, $reviewer);
             }
 
+            // Makluman e-mel kepada pemohon; `afterCommit` memastikan ia hanya dihantar jika keputusan disimpan.
+            $applicant->notify($decision === UserStatus::Active
+                ? new RegistrationApproved(self::APPROVAL_ROLES[$approvedRole])
+                : new RegistrationRejected());
+
             return 'ok:' . $applicant->name;
         });
 
@@ -137,8 +144,8 @@ class RegistrationRequests extends Component
             $result === 'self' => session()->flash('error', 'Anda tidak boleh memproses permohonan pendaftaran anda sendiri.'),
             $result === 'processed' => session()->flash('error', 'Permohonan ini telah diproses dan tidak lagi menunggu kelulusan.'),
             default => session()->flash('message', $decision === UserStatus::Active
-                ? 'Permohonan ' . substr($result, 3) . ' telah diluluskan dengan Tahap Capaian ' . self::APPROVAL_ROLES[$approvedRole] . '. Akaun kini aktif.'
-                : 'Permohonan ' . substr($result, 3) . ' telah ditolak.'),
+                ? 'Permohonan ' . substr($result, 3) . ' telah diluluskan dengan Tahap Capaian ' . self::APPROVAL_ROLES[$approvedRole] . '. Akaun kini aktif dan e-mel makluman dihantar kepada pemohon.'
+                : 'Permohonan ' . substr($result, 3) . ' telah ditolak. E-mel makluman dihantar kepada pemohon.'),
         };
     }
 

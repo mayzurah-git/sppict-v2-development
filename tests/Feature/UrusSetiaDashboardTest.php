@@ -63,7 +63,8 @@ class UrusSetiaDashboardTest extends TestCase
     {
         $applicant = User::factory()->create(['agency_id' => $this->agency->id]);
 
-        foreach (['SUBMITTED', 'SUBMITTED', 'APPROVED', 'DRAFT'] as $i => $status) {
+        // PP1: kad mengikut status proses; 'APPROVED' (Lulus) ialah keputusan mesyuarat, bukan status proses.
+        foreach (['SUBMITTED', 'SUBMITTED', 'COMPLETE', 'DRAFT'] as $i => $status) {
             Application::create([
                 'reference_number' => 'SPPICT/2026/' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
                 'agency_id' => $this->agency->id,
@@ -78,8 +79,9 @@ class UrusSetiaDashboardTest extends TestCase
 
         $html = $response->getContent();
         $this->assertMatchesRegularExpression('/>Dihantar<\/span>.*?>2<\/span>/s', $html);
-        $this->assertMatchesRegularExpression('/>Lulus<\/span>.*?>1<\/span>/s', $html);
-        $this->assertMatchesRegularExpression('/>Perlu Pembetulan<\/span>.*?>0<\/span>/s', $html);
+        $this->assertMatchesRegularExpression('/>Lengkap<\/span>.*?>1<\/span>/s', $html);
+        $this->assertMatchesRegularExpression('/>Tidak Lengkap<\/span>.*?>0<\/span>/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/>Lulus<\/span>/', $html);
     }
 
     public function test_pending_registrations_are_listed_with_link_to_review_page(): void

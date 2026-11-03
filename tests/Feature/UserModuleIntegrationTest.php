@@ -17,11 +17,13 @@ use Database\Seeders\GradeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Exceptions\PublicPropertyNotFoundException;
 use Livewire\Livewire;
 use Livewire\Volt\Volt;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
+use Tests\Concerns\CapturesSetupLinks;
 use Tests\Concerns\UsesApplicationMasterData;
 use Tests\TestCase;
 
@@ -31,7 +33,7 @@ use Tests\TestCase;
  */
 class UserModuleIntegrationTest extends TestCase
 {
-    use RefreshDatabase, UsesApplicationMasterData;
+    use CapturesSetupLinks, RefreshDatabase, UsesApplicationMasterData;
 
     private const STRONG = 'KataLaluanKuat#2026';
 
@@ -201,54 +203,58 @@ class UserModuleIntegrationTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_urus_setia_created_account_must_change_password_before_use(): void
+    public function test_urus_setia_created_account_sets_password_via_email_link_before_use(): void
     {
+        Notification::fake();
         $urusSetia = $this->actor('pentadbir_urus_setia');
 
-        $component = $this->fillProfile(Livewire::actingAs($urusSetia)->test(RegisterUser::class), ['email' => 'pengurusan@ns.gov.my'])
+        $this->fillProfile(Livewire::actingAs($urusSetia)->test(RegisterUser::class), ['email' => 'pengurusan@ns.gov.my'])
             ->set('role', 'pengurusan')
             ->call('save')
             ->assertHasNoErrors();
-        $temporary = $component->get('temporaryPassword');
         Auth::logout();
 
         $user = User::where('email', 'pengurusan@ns.gov.my')->firstOrFail();
         $this->assertTrue($user->must_change_password);
         $this->assertSame(['pengurusan'], $user->getRoleNames()->all());
 
-        // Log masuk → halaman tukar kata laluan; kawasan dalaman disekat
-        $this->assertSame(route('password.change'), $this->httpLogin('pengurusan@ns.gov.my', $temporary));
-        $this->get('/dashboard')->assertRedirect(route('password.change'));
-
-        $this->httpChangePassword($temporary);
+        $this->setupPasswordViaLink($user);
 
         $user->refresh();
         $this->assertFalse($user->must_change_password);
         $this->assertTrue(Hash::check(self::STRONG, $user->password));
 
-        Auth::logout();
         $this->assertSame(route('dashboard', absolute: false), parse_url($this->httpLogin('pengurusan@ns.gov.my', self::STRONG), PHP_URL_PATH));
         $this->get('/dashboard')->assertOk();
         $this->get('/application/new')->assertForbidden();
     }
 
-    public function test_superadmin_created_urus_setia_can_process_requests_after_password_change(): void
+    public function test_superadmin_created_urus_setia_can_process_requests_after_setting_password(): void
     {
+        Notification::fake();
         $superadmin = $this->actor('superadmin');
 
-        $component = $this->fillProfile(Livewire::actingAs($superadmin)->test(UserManagement::class)->call('openModal'), ['email' => 'us.baru@ns.gov.my'])
+        $this->fillProfile(Livewire::actingAs($superadmin)->test(UserManagement::class)->call('openModal'), ['email' => 'us.baru@ns.gov.my'])
             ->set('role', 'pentadbir_urus_setia')
             ->call('saveUser')
             ->assertHasNoErrors();
-        $temporary = $component->get('temporaryPassword');
         Auth::logout();
 
-        $this->assertSame(route('password.change'), $this->httpLogin('us.baru@ns.gov.my', $temporary));
-        $this->get('/urus-setia/pengguna/permohonan')->assertRedirect(route('password.change'));
+        $this->setupPasswordViaLink(User::where('email', 'us.baru@ns.gov.my')->firstOrFail());
 
-        $this->httpChangePassword($temporary);
-
+        $this->httpLogin('us.baru@ns.gov.my', self::STRONG);
         $this->get('/urus-setia/pengguna/permohonan')->assertOk();
+    }
+
+    private function setupPasswordViaLink(User $user): void
+    {
+        Volt::test('pages.auth.setup-password', ['token' => $this->sentToken($user)])
+            ->set('email', $user->email)
+            ->set('password', self::STRONG)
+            ->set('password_confirmation', self::STRONG)
+            ->call('setupPassword')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('login'));
     }
 
     // =========================================================
@@ -287,7 +293,9 @@ class UserModuleIntegrationTest extends TestCase
 
         $component = Volt::actingAs($user)->test('profile.update-profile-information-form');
 
-        foreach (['role', 'role_id', 'status', 'agency_id', 'approved_by', 'must_change_password', 'position_id', 'grade_id'] as $field) {
+        // UM12: `grade_id` kini boleh dikemas kini melalui Profil (disahkan terhadap pivot Jawatan);
+        // nama & No. KP menjadi rujukan sahaja.
+        foreach (['role', 'role_id', 'status', 'agency_id', 'approved_by', 'must_change_password', 'position_id', 'name', 'no_kad_pengenalan', 'inactive_reason'] as $field) {
             try {
                 $component->set($field, 'x');
                 $this->fail("Medan [{$field}] tidak sepatutnya boleh diubah melalui Profil.");
@@ -305,12 +313,11 @@ class UserModuleIntegrationTest extends TestCase
 
         // Normalisasi; peranan/agensi/status kekal.
         Volt::actingAs($user)->test('profile.update-profile-information-form')
-            ->set('name', '  Nama   Baharu ')->set('email', ' Saya.Baru@NS.gov.my ')
+            ->set('phone_office', '067659999')->set('phone_mobile', '0123456789')->set('email', ' Saya.Baru@NS.gov.my ')
             ->call('updateProfileInformation')
             ->assertHasNoErrors();
 
         $user->refresh();
-        $this->assertSame('Nama Baharu', $user->name);
         $this->assertSame('saya.baru@ns.gov.my', $user->email);
         $this->assertSame(['pengguna_biasa'], $user->getRoleNames()->all());
         $this->assertSame($this->agency->id, $user->agency_id);
@@ -419,20 +426,6 @@ class UserModuleIntegrationTest extends TestCase
         $this->assertAuthenticated();
 
         return (string) $response->json('components.0.effects.redirect');
-    }
-
-    /**
-     * Tukar kata laluan sementara melalui HTTP + /livewire/update sebenar.
-     */
-    private function httpChangePassword(string $current): void
-    {
-        $response = $this->livewireAction('/tukar-kata-laluan', 'pages.auth.change-password', [
-            'current_password' => $current,
-            'password' => self::STRONG,
-            'password_confirmation' => self::STRONG,
-        ], 'updatePassword');
-
-        $this->assertSame(route('dashboard'), $response->json('components.0.effects.redirect'));
     }
 
     private function livewireAction(string $uri, string $component, array $updates, string $method)

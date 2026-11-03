@@ -10,6 +10,7 @@ use OwenIt\Auditing\Events\AuditCustom;
  * Rekod audit OwenIt (custom event) bagi perubahan peranan Spatie, yang tidak diaudit secara
  * automatik oleh model User. Dipanggil dalam transaksi yang sama dengan perubahan peranan supaya
  * audit dibatalkan bersama jika transaksi gagal. Tiada kata laluan/token direkodkan.
+ * Turut digunakan bagi event akaun lain tanpa perubahan atribut (cth. `setup_link_sent`, UM13).
  */
 class RoleChangeAudit
 {

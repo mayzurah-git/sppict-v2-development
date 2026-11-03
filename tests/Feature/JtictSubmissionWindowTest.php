@@ -145,28 +145,41 @@ class JtictSubmissionWindowTest extends TestCase
 
     // --- PERLU PINDAAN ---
 
-    public function test_needs_amendment_resubmits_to_original_meeting_even_when_closed(): void
+    /**
+     * PP2 (keputusan 3.4): mesyuarat asal yang telah ditutup TIDAK lagi menerima penghantaran semula;
+     * pemohon mesti memilih Mesyuarat JTICT aktif. (Menggantikan ujian lama
+     * test_needs_amendment_resubmits_to_original_meeting_even_when_closed.)
+     */
+    public function test_needs_amendment_with_closed_original_meeting_must_choose_open_meeting(): void
     {
         $original = $this->openJtictMeeting(['series' => 'Bil. 1/2026']);
         $application = $this->amendmentFor($original);
 
         // Tempoh asal ditutup dan mesyuarat baharu dibuka
         $original->update(['submission_closes_at' => today()->subDay()]);
-        $this->openJtictMeeting(['series' => 'Bil. 2/2026']);
+        $newMeeting = $this->openJtictMeeting(['series' => 'Bil. 2/2026']);
 
         $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid])
             ->set('currentStep', 5)
-            ->assertSee('Penghantaran semula pindaan untuk JTICTNS Bil. 1/2026')
-            ;
+            ->assertSee('Pilih Mesyuarat JTICT untuk penghantaran semula')
+            ->assertSee('JTICTNS Bil. 2/2026');
 
-        $this->assertFalse($this->submitButtonDisabled($component));
+        // Butang Hantar dinyahaktifkan sehingga mesyuarat dipilih
+        $this->assertTrue($this->submitButtonDisabled($component));
 
         $this->fillValidForm($component);
+        $component->call('submitApplication')->assertHasErrors('resubmissionMeetingId');
+        $this->assertSame('NEEDS_AMENDMENT', $application->fresh()->status);
+        $this->assertSame($original->id, $application->fresh()->jtict_meeting_id);
+
+        $component->set('resubmissionMeetingId', $newMeeting->id);
+        $this->assertFalse($this->submitButtonDisabled($component));
+
         $component->call('submitApplication')->assertHasNoErrors()->assertRedirect('/dashboard');
 
         $application->refresh();
         $this->assertSame('SUBMITTED', $application->status);
-        $this->assertSame($original->id, $application->jtict_meeting_id);
+        $this->assertSame($newMeeting->id, $application->jtict_meeting_id);
     }
 
     // --- PEMBANTU ---

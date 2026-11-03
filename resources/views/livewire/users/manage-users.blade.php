@@ -22,11 +22,17 @@
 
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden space-y-4 p-4">
         <div class="flex flex-col md:flex-row gap-3">
-            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Cari Nama / E-mel / No. KP..." class="w-full md:w-1/3 text-xs border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Cari Nama / E-mel / No. KP..." class="w-full md:w-1/4 text-xs border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-blue-500">
             <select wire:model.live="roleFilter" class="w-full md:w-1/4 text-xs border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 <option value="">-- Semua Tahap Capaian --</option>
                 @foreach ($roleLabels as $value => $label)
                     <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            <select wire:model.live="agencyFilter" class="w-full md:w-1/4 text-xs border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <option value="">-- Semua Jabatan/Agensi --</option>
+                @foreach ($agencyFilterOptions as $agency)
+                    <option value="{{ $agency->id }}">{{ $agency->name }}</option>
                 @endforeach
             </select>
             <select wire:model.live="statusFilter" class="w-full md:w-1/5 text-xs border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-blue-500">
@@ -86,6 +92,13 @@
                                     <button wire:click="openDeactivate('{{ $user->uuid }}')" class="px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 rounded-lg font-bold text-xs transition">
                                         ⛔ Nyahaktif
                                     </button>
+                                    @if (\App\Support\AccountSetupLinkSender::canResend($user))
+                                        <button wire:click="resendSetupLink('{{ $user->uuid }}')" wire:loading.attr="disabled"
+                                            wire:confirm="Jana semula pautan Tetapkan Kata Laluan untuk {{ $user->name }}? Pautan lama akan dibatalkan."
+                                            class="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded-lg font-bold text-xs transition">
+                                            🔄 Jana Semula Pautan
+                                        </button>
+                                    @endif
                                 @elseif ($user->isInactive())
                                     <button wire:click="reactivate('{{ $user->uuid }}')" wire:loading.attr="disabled"
                                         wire:confirm="Aktifkan semula akaun {{ $user->name }}? Pengguna akan dapat log masuk semula."

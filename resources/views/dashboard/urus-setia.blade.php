@@ -2,15 +2,14 @@
 @php
     $user = auth()->user();
 
-    // Status permohonan yang wujud dalam aliran kerja (draf tidak dikira; ia milik pemohon).
-    $statusCards = [
-        'SUBMITTED' => ['label' => 'Dihantar', 'hint' => 'Menunggu semakan Urus Setia', 'dot' => 'bg-blue-800'],
-        'NEEDS_AMENDMENT' => ['label' => 'Perlu Pembetulan', 'hint' => 'Dikembalikan kepada agensi', 'dot' => 'bg-purple-800'],
-        'APPROVED' => ['label' => 'Lulus', 'hint' => 'Diluluskan mesyuarat', 'dot' => 'bg-emerald-800'],
-        'REJECTED' => ['label' => 'Ditolak', 'hint' => 'Tidak diluluskan', 'dot' => 'bg-red-800'],
-    ];
+    // PP1: kad mengikut status PROSES (App\Enums\ApplicationStatus); draf tidak dikira kerana ia milik pemohon.
+    // Keputusan mesyuarat (Lulus / Tidak Lulus / Kaji Semula) bukan status proses dan tidak dipaparkan di sini.
+    $statusCards = array_values(array_filter(
+        \App\Enums\ApplicationStatus::cases(),
+        fn ($status) => $status !== \App\Enums\ApplicationStatus::Draft,
+    ));
     $statusCounts = \App\Models\Application::query()
-        ->whereIn('status', array_keys($statusCards))
+        ->whereIn('status', array_map(fn ($status) => $status->value, $statusCards))
         ->selectRaw('status, count(*) as total')
         ->groupBy('status')
         ->pluck('total', 'status');
@@ -91,14 +90,14 @@
 
 <!-- Ringkasan ikut status -->
 <section aria-label="Ringkasan status permohonan" class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3.5">
-    @foreach ($statusCards as $status => $card)
+    @foreach ($statusCards as $status)
         <div class="bg-white border border-slate-200 rounded-[14px] p-[18px] flex flex-col gap-2.5">
             <span class="flex items-center justify-between gap-2">
-                <span class="text-[13px] font-bold text-slate-600">{{ $card['label'] }}</span>
-                <span class="w-2.5 h-2.5 rounded-full {{ $card['dot'] }}"></span>
+                <span class="text-[13px] font-bold text-slate-600">{{ $status->label() }}</span>
+                <x-application-status-badge :status="$status" variant="dot" />
             </span>
-            <span class="text-[32px] leading-none font-black tracking-tight">{{ number_format($statusCounts[$status] ?? 0) }}</span>
-            <span class="text-xs text-slate-500">{{ $card['hint'] }}</span>
+            <span class="text-[32px] leading-none font-black tracking-tight">{{ number_format($statusCounts[$status->value] ?? 0) }}</span>
+            <span class="text-xs text-slate-500">{{ $status->description() }}</span>
         </div>
     @endforeach
 </section>
@@ -160,7 +159,7 @@
                                     <strong>{{ $app->reference_number }}</strong>
                                     <span class="text-amber-900 truncate" title="{{ $app->title }}">{{ $app->title }}@if ($app->agency) · {{ $app->agency->code }}@endif</span>
                                 </span>
-                                <a href="{{ route('application.view', $app->uuid) }}" class="flex-none text-[13px] font-bold text-amber-800 hover:underline">Lantik Pegawai</a>
+                                <a href="{{ route('application.view', $app->uuid) }}" class="flex-none text-[13px] font-bold text-amber-800 hover:underline">Tambah Pegawai</a>
                             </li>
                         @endforeach
                     </ul>

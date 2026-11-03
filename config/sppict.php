@@ -33,4 +33,16 @@ return [
         'baseline' => env('SPPICT_DORMANCY_BASELINE', '2026-10-21'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | E-mel Urus Setia
+    |--------------------------------------------------------------------------
+    |
+    | Alamat hubungan Urus Setia yang dipaparkan dalam e-mel makluman
+    | kepada pengguna (cth. keputusan permohonan pendaftaran).
+    |
+    */
+
+    'secretariat_email' => env('SPPICT_SECRETARIAT_EMAIL', 'urussetia.mkk@ns.gov.my'),
+
 ];

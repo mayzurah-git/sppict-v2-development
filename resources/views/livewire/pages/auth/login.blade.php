@@ -1,6 +1,9 @@
 <?php
 
 use App\Livewire\Forms\LoginForm;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -27,7 +30,67 @@ new #[Layout('layouts.guest')] class extends Component
             return;
         }
 
+        // `url.intended` mungkin ditinggalkan oleh sesi peranan lain (cth. Urus Setia di /admin/agencies
+        // sebelum sesi tamat). Buang jika pengguna ini tiada akses supaya tidak terus ke halaman 403.
+        $intended = Session::get('url.intended');
+
+        if ($intended && ! $this->canAccessUrl(auth()->user(), $intended)) {
+            Session::forget('url.intended');
+        }
+
         $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+    }
+
+    /**
+     * Semak middleware `role`, `not-role` dan `can` pada laluan sasaran terhadap pengguna.
+     */
+    private function canAccessUrl(User $user, string $url): bool
+    {
+        try {
+            $route = Route::getRoutes()->match(Request::create($url));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if (! is_string($middleware) || ! str_contains($middleware, ':')) {
+                continue;
+            }
+
+            [$name, $parameters] = explode(':', $middleware, 2);
+            $parameters = explode(',', $parameters);
+
+            $allowed = match ($name) {
+                // Spatie: `role:a|b[,guard]`.
+                'role' => $user->hasAnyRole(explode('|', $parameters[0])),
+                'not-role' => ! $user->hasAnyRole($parameters),
+                'can' => $this->passesGate($user, $parameters),
+                default => true,
+            };
+
+            if (! $allowed) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * `can:ability,Model`: hanya argumen nama kelas boleh disemak di sini. Argumen parameter laluan
+     * (route model binding) dibiarkan kepada policy pada permintaan sebenar.
+     */
+    private function passesGate(User $user, array $parameters): bool
+    {
+        $ability = array_shift($parameters);
+
+        foreach ($parameters as $parameter) {
+            if (! class_exists($parameter)) {
+                return true;
+            }
+        }
+
+        return $user->can($ability, $parameters);
     }
 }; ?>
 

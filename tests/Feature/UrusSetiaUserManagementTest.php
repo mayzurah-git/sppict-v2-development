@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserStatus;
+use App\Livewire\Users\ManageUsers;
 use App\Livewire\Users\RegisterUser;
 use App\Livewire\Users\RegistrationRequests;
 use App\Models\Agency;
@@ -11,9 +12,15 @@ use App\Models\Meeting;
 use App\Models\Position;
 use App\Models\ServiceScheme;
 use App\Models\User;
+use App\Notifications\AccountSetupLink;
+use App\Notifications\RegistrationApproved;
+use App\Notifications\RegistrationRejected;
 use Database\Seeders\GradeSeeder;
+use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password as PasswordBroker;
 use Livewire\Exceptions\PublicPropertyNotFoundException;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
@@ -22,6 +29,7 @@ use OwenIt\Auditing\Models\Audit;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
+use Tests\Concerns\CapturesSetupLinks;
 use Tests\TestCase;
 
 /**
@@ -29,6 +37,7 @@ use Tests\TestCase;
  */
 class UrusSetiaUserManagementTest extends TestCase
 {
+    use CapturesSetupLinks;
     use RefreshDatabase;
 
     private User $urusSetia;
@@ -182,11 +191,13 @@ class UrusSetiaUserManagementTest extends TestCase
             }
         }
 
-        try {
-            $component->set('temporaryPassword', 'Pilihan#123');
-            $this->fail('temporaryPassword tidak sepatutnya boleh ditetapkan.');
-        } catch (CannotUpdateLockedPropertyException) {
-            // Dijangka: property dikunci.
+        foreach (['createdUserUuid', 'createdUserEmail', 'setupLinkSent'] as $property) {
+            try {
+                $component->set($property, 'x');
+                $this->fail("Property [{$property}] tidak sepatutnya boleh ditetapkan.");
+            } catch (CannotUpdateLockedPropertyException) {
+                // Dijangka: property dikunci.
+            }
         }
 
         $component->call('save')->assertHasNoErrors();
@@ -198,51 +209,220 @@ class UrusSetiaUserManagementTest extends TestCase
         $this->assertFalse(Hash::check('Pilihan#123', $user->password));
     }
 
-    public function test_created_account_uses_generated_temporary_password_and_must_change_it(): void
+    public function test_created_account_receives_setup_link_by_email_and_no_password_is_shown(): void
     {
-        $component = $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save');
+        Notification::fake();
 
-        $temporaryPassword = $component->get('temporaryPassword');
-        $this->assertIsString($temporaryPassword);
-        $this->assertGreaterThanOrEqual(12, strlen($temporaryPassword));
-        $this->assertNotSame('Password123!', $temporaryPassword);
-        $component->assertSee($temporaryPassword);
+        $component = $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save')
+            ->assertSet('setupLinkSent', true)
+            ->assertSee('Pautan Tetapkan Kata Laluan telah dihantar ke')
+            ->assertSee('siti@ns.gov.my')
+            ->assertDontSee('Kata laluan sementara');
 
         $user = User::where('email', 'siti@ns.gov.my')->firstOrFail();
-        $this->assertTrue(Hash::check($temporaryPassword, $user->password));
         $this->assertTrue($user->must_change_password);
         $this->assertSame(UserStatus::Active, $user->status);
         $this->assertSame('050303051111', $user->no_kad_pengenalan);
         $this->assertSame($this->grade('10')->id, $user->grade_id);
 
-        // Tidak disimpan dalam session; hilang selepas ditutup.
-        $this->assertStringNotContainsString($temporaryPassword, json_encode(session()->all()));
-        $component->call('dismissTemporaryPassword')->assertSet('temporaryPassword', null)->assertDontSee($temporaryPassword);
+        $token = $this->sentToken($user, isReset: false);
+        $this->assertTrue(PasswordBroker::broker('account_setup')->tokenExists($user, $token));
+        $component->assertDontSee($token);
+        $this->assertStringNotContainsString($token, json_encode(session()->all()));
 
-        // Setiap pendaftaran menjana kata laluan berbeza.
-        $second = $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class), [
-            'email' => 'ahmad@ns.gov.my',
-            'no_kad_pengenalan' => '900101051234',
-        ])->call('save');
-        $this->assertNotSame($temporaryPassword, $second->get('temporaryPassword'));
+        // Pautan menggunakan route Tetapkan Kata Laluan; e-mel tidak mengandungi kata laluan.
+        $mail = (new AccountSetupLink($token))->toMail($user);
+        $this->assertStringContainsString(route('password.setup', ['token' => $token, 'email' => $user->email]), $mail->actionUrl);
+
+        $component->call('dismissSetupStatus')->assertSet('setupLinkSent', null);
     }
 
-    public function test_password_is_not_recorded_in_audit_log(): void
+    public function test_email_failure_shows_status_and_resend_button(): void
     {
+        $dispatcher = $this->mock(NotificationDispatcher::class);
+        $dispatcher->shouldReceive('sendNow')->once()->andThrow(new RuntimeException('SMTP tidak tersedia'));
+
+        $component = $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('setupLinkSent', false)
+            ->assertSee('e-mel gagal dihantar')
+            ->assertSee('Jana Semula Pautan');
+
+        $user = User::where('email', 'siti@ns.gov.my')->firstOrFail();
+        $this->assertSame(UserStatus::Active, $user->status, 'Pendaftaran tidak dibatalkan walaupun e-mel gagal');
+        $this->assertDatabaseMissing('account_setup_tokens', ['email' => $user->email]);
+
+        // Jana Semula berjaya selepas e-mel pulih.
+        $dispatcher->shouldReceive('sendNow')->once();
+        $component->call('resendSetupLink', $user->uuid)->assertSet('setupLinkSent', true);
+        $this->assertDatabaseHas('account_setup_tokens', ['email' => $user->email]);
+    }
+
+    public function test_setup_token_is_not_recorded_in_audit_log(): void
+    {
+        Notification::fake();
         config(['audit.console' => true]);
 
-        $component = $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save');
-        $temporaryPassword = $component->get('temporaryPassword');
+        $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save');
         $user = User::where('email', 'siti@ns.gov.my')->firstOrFail();
+        $token = $this->sentToken($user);
 
         $audits = Audit::where('auditable_type', User::class)->where('auditable_id', $user->id)->get();
         $this->assertNotEmpty($audits);
+        $this->assertSame(1, $audits->where('event', 'setup_link_sent')->count());
 
         foreach ($audits as $audit) {
             $this->assertArrayNotHasKey('password', $audit->new_values ?? []);
-            $this->assertStringNotContainsString($temporaryPassword, json_encode($audit->getAttributes()));
+            $this->assertStringNotContainsString($token, json_encode($audit->getAttributes()));
             $this->assertStringNotContainsString($user->password, json_encode($audit->getAttributes()));
         }
+    }
+
+    // =========================================================
+    // UM13: Jana Semula pautan oleh Urus Setia
+    // =========================================================
+
+    public function test_urus_setia_can_resend_link_only_for_active_users_who_never_logged_in(): void
+    {
+        Notification::fake();
+
+        $fresh = User::factory()->create(['must_change_password' => true]);
+        $fresh->assignRole('pengguna_biasa');
+        $loggedIn = User::factory()->create(['last_login_at' => now()]);
+        $loggedIn->assignRole('pengguna_biasa');
+        $inactive = User::factory()->create(['status' => UserStatus::Inactive]);
+        $inactive->assignRole('pengguna_biasa');
+        $superadmin = User::factory()->create();
+        $superadmin->assignRole('superadmin');
+
+        $hash = $fresh->password;
+        $component = Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)
+            ->call('resendSetupLink', $fresh->uuid)
+            ->assertSee("Pautan Tetapkan Kata Laluan baharu telah dihantar ke {$fresh->email}");
+
+        $first = $this->sentToken($fresh, isReset: false);
+        $this->assertSame($hash, $fresh->fresh()->password, 'Jana Semula tidak mengubah kata laluan');
+
+        // Token baharu membatalkan token lama.
+        $component->call('resendSetupLink', $fresh->uuid);
+        $second = $this->sentToken($fresh);
+        $this->assertNotSame($first, $second);
+        $broker = PasswordBroker::broker('account_setup');
+        $this->assertFalse($broker->tokenExists($fresh, $first));
+        $this->assertTrue($broker->tokenExists($fresh, $second));
+
+        foreach ([$loggedIn, $inactive, $superadmin] as $target) {
+            Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)
+                ->call('resendSetupLink', $target->uuid)
+                ->assertForbidden();
+            Notification::assertNotSentTo($target, AccountSetupLink::class);
+        }
+    }
+
+    public function test_resend_button_is_listed_only_for_eligible_users(): void
+    {
+        $fresh = User::factory()->create(['name' => 'Belum Log Masuk']);
+        $fresh->assignRole('pengguna_biasa');
+        $loggedIn = User::factory()->create(['name' => 'Sudah Log Masuk', 'last_login_at' => now()]);
+        $loggedIn->assignRole('pengguna_biasa');
+
+        Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)
+            ->assertSeeHtml("resendSetupLink('{$fresh->uuid}')")
+            ->assertDontSeeHtml("resendSetupLink('{$loggedIn->uuid}')");
+    }
+
+    public function test_user_list_can_be_filtered_by_agency(): void
+    {
+        $otherAgency = Agency::create(['code' => 'JPNNS', 'name' => 'Jabatan Pendidikan Negeri Sembilan', 'category' => 'STATE_DEPT', 'is_active' => false]);
+        $inJkr = User::factory()->create(['name' => 'Pegawai JKR', 'agency_id' => $this->agency->id]);
+        $inJkr->assignRole('pengguna_biasa');
+        $inJpn = User::factory()->create(['name' => 'Pegawai JPN', 'agency_id' => $otherAgency->id]);
+        $inJpn->assignRole('pengurusan');
+
+        Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)
+            ->assertSee('Pegawai JKR')
+            ->assertSee('Pegawai JPN')
+            // Agensi tidak aktif yang masih mempunyai pengguna turut tersenarai sebagai pilihan penapis.
+            ->assertViewHas('agencyFilterOptions', fn ($options) => $options->pluck('id')->contains($otherAgency->id))
+            ->set('agencyFilter', (string) $otherAgency->id)
+            ->assertSee('Pegawai JPN')
+            ->assertDontSee('Pegawai JKR')
+            ->set('agencyFilter', '')
+            ->assertSee('Pegawai JKR');
+    }
+
+    public function test_resend_is_rate_limited_and_restricted_to_urus_setia(): void
+    {
+        Notification::fake();
+
+        $target = User::factory()->create();
+        $target->assignRole('pengguna_biasa');
+
+        for ($i = 0; $i < 3; $i++) {
+            Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)->call('resendSetupLink', $target->uuid);
+        }
+        Livewire::actingAs($this->urusSetia)->test(ManageUsers::class)->call('resendSetupLink', $target->uuid)
+            ->assertSee('Terlalu banyak cubaan');
+        Notification::assertSentToTimes($target, AccountSetupLink::class, 3);
+
+        foreach (['pengguna_biasa', 'pengurusan', 'superadmin'] as $role) {
+            $actor = User::factory()->create();
+            $actor->assignRole($role);
+
+            Livewire::actingAs($actor)->test(RegisterUser::class)->assertForbidden();
+        }
+    }
+
+    public function test_setup_link_lets_user_choose_password_and_log_in(): void
+    {
+        Notification::fake();
+
+        $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save');
+        $user = User::where('email', 'siti@ns.gov.my')->firstOrFail();
+        $token = $this->sentToken($user);
+        auth()->logout();
+
+        $this->get(route('password.setup', ['token' => $token, 'email' => $user->email]))->assertOk()->assertSee('Tetapkan Kata Laluan');
+
+        Volt::test('pages.auth.setup-password', ['token' => $token])
+            ->set('email', $user->email)
+            ->set('password', 'KataBaharu#2026')
+            ->set('password_confirmation', 'KataBaharu#2026')
+            ->call('setupPassword')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('login'));
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('KataBaharu#2026', $user->password));
+        $this->assertFalse($user->must_change_password);
+
+        // Token sekali guna.
+        Volt::test('pages.auth.setup-password', ['token' => $token])
+            ->set('email', $user->email)
+            ->set('password', 'LainLagi#2026x')
+            ->set('password_confirmation', 'LainLagi#2026x')
+            ->call('setupPassword')
+            ->assertHasErrors(['email']);
+    }
+
+    public function test_setup_link_expires_after_72_hours(): void
+    {
+        Notification::fake();
+
+        $this->fill(Livewire::actingAs($this->urusSetia)->test(RegisterUser::class))->call('save');
+        $user = User::where('email', 'siti@ns.gov.my')->firstOrFail();
+        $token = $this->sentToken($user);
+        auth()->logout();
+
+        $this->travel(73)->hours();
+
+        Volt::test('pages.auth.setup-password', ['token' => $token])
+            ->set('email', $user->email)
+            ->set('password', 'KataBaharu#2026')
+            ->set('password_confirmation', 'KataBaharu#2026')
+            ->call('setupPassword')
+            ->assertHasErrors(['email']);
+        $this->assertTrue($user->fresh()->must_change_password);
     }
 
     public function test_failed_registration_leaves_no_partial_account(): void
@@ -337,6 +517,75 @@ class UrusSetiaUserManagementTest extends TestCase
         $this->assertSame(UserStatus::Rejected, $rejected->status);
         $this->assertNull($rejected->approved_by);
         $this->assertNull($rejected->approved_at);
+    }
+
+    public function test_approval_emails_applicant_with_role_and_login_link(): void
+    {
+        Notification::fake();
+        $pending = $this->makePendingApplicant();
+
+        Livewire::actingAs($this->urusSetia)->test(RegistrationRequests::class)
+            ->set('approvalRole', 'pengurusan')
+            ->call('approve', $pending->uuid)
+            ->assertSee('e-mel makluman dihantar kepada pemohon');
+
+        Notification::assertSentTo($pending, RegistrationApproved::class, fn (RegistrationApproved $n) => $n->roleLabel === 'Pengurusan');
+        Notification::assertNotSentTo($pending, RegistrationRejected::class);
+
+        $mail = (new RegistrationApproved('Pengurusan'))->toMail($pending->fresh());
+        $this->assertSame('[SPPICT] Pendaftaran Akaun Diluluskan', $mail->subject);
+        $this->assertSame(route('login'), $mail->actionUrl);
+        $body = implode("\n", array_merge($mail->introLines, $mail->outroLines));
+        $this->assertStringContainsString($pending->email, $body);
+        $this->assertStringContainsString('Pengurusan', $body);
+        $this->assertStringContainsString('urussetia.mkk@ns.gov.my', $body);
+        $this->assertSame('Sekian, terima kasih.', $mail->salutation);
+    }
+
+    public function test_rejection_emails_applicant_without_remarks(): void
+    {
+        Notification::fake();
+        $pending = $this->makePendingApplicant();
+
+        Livewire::actingAs($this->urusSetia)->test(RegistrationRequests::class)
+            ->call('reject', $pending->uuid)
+            ->assertSee('E-mel makluman dihantar kepada pemohon');
+
+        Notification::assertSentTo($pending, RegistrationRejected::class);
+        Notification::assertNotSentTo($pending, RegistrationApproved::class);
+
+        $mail = (new RegistrationRejected())->toMail($pending->fresh());
+        $this->assertSame('[SPPICT] Pendaftaran Akaun Tidak Diluluskan', $mail->subject);
+        $this->assertNull($mail->actionUrl);
+        $this->assertSame([
+            'Dukacita dimaklumkan bahawa permohonan pendaftaran akaun SPPICT tuan/puan tidak diluluskan.',
+            'Sebarang pertanyaan lanjut, tuan/puan boleh menghubungi pihak Urus Setia melalui e-mel urussetia.mkk@ns.gov.my.',
+        ], $mail->introLines);
+        $this->assertSame('Sekian, terima kasih.', $mail->salutation);
+    }
+
+    public function test_decision_emails_are_not_sent_when_nothing_is_processed(): void
+    {
+        Notification::fake();
+
+        // Rekod bukan pending (sudah aktif) tidak diproses semula.
+        $active = User::factory()->create();
+        Livewire::actingAs($this->urusSetia)->test(RegistrationRequests::class)->call('reject', $active->uuid);
+        Livewire::actingAs($this->urusSetia)->test(RegistrationRequests::class)->call('approve', $active->uuid);
+
+        // Transaksi gagal: tiada e-mel (afterCommit).
+        $pending = $this->makePendingApplicant();
+        User::updated(function (): void {
+            throw new RuntimeException('Simulasi kegagalan.');
+        });
+
+        try {
+            Livewire::actingAs($this->urusSetia)->test(RegistrationRequests::class)->call('approve', $pending->uuid);
+        } catch (RuntimeException) {
+            // Dijangka.
+        }
+
+        Notification::assertNothingSent();
     }
 
     public function test_requests_that_are_no_longer_pending_cannot_be_processed_again(): void

@@ -27,11 +27,57 @@
         </div>
     @endif
 
+    {{-- PP2: ulasan Urus Setia bagi permohonan Tidak Lengkap (baca sahaja; tidak boleh diubah oleh pemohon) --}}
+    @if ($this->isAmendment)
+        <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 text-purple-900 text-xs rounded space-y-1">
+            <p class="font-bold">Permohonan ini Tidak Lengkap — sila buat pembetulan dan hantar semula.</p>
+            @if ($this->amendmentRemarks)
+                <p class="font-semibold">Ulasan Urus Setia{{ $this->amendmentReview ? ' (' . $this->amendmentReview->created_at->format('d/m/Y h:i A') . ')' : '' }}:</p>
+                <p class="whitespace-pre-line">{{ $this->amendmentRemarks }}</p>
+            @endif
+        </div>
+    @endif
+
     @error('form.agency')
         <div class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 text-xs rounded">
             {{ $message }}
         </div>
     @enderror
+
+    {{-- PP3: Urus Setia memilih & mengesahkan agensi sasaran sebelum mengisi borang --}}
+    @if ($this->isOnBehalf && ! $confirmedAgencyId)
+        <div class="p-5 bg-green-50 border border-green-200 rounded-lg space-y-4" wire:key="target-agency-picker">
+            <div>
+                <h3 class="text-sm font-bold text-green-900">Permohonan bagi Pihak Agensi</h3>
+                <p class="text-xs text-green-800 mt-0.5">Pilih Jabatan/Agensi sasaran. Permohonan akan didaftarkan di bawah agensi ini dan Pegawai Bertanggungjawab dipilih daripada pegawai agensi tersebut. Agensi tidak boleh ditukar selepas permohonan disimpan.</p>
+            </div>
+            <x-form.select label="Jabatan/Agensi Sasaran" wire:model="targetAgencyId" :error="$errors->first('targetAgencyId')" required>
+                <option value="">-- Pilih Jabatan/Agensi --</option>
+                @foreach ($this->agencyOptions as $agency)
+                    <option value="{{ $agency->id }}">{{ $agency->name }} ({{ $agency->code }})</option>
+                @endforeach
+            </x-form.select>
+            <div class="flex justify-end">
+                <button type="button" wire:click="confirmAgency" wire:loading.attr="disabled" class="px-5 py-2.5 bg-green-800 hover:bg-green-900 text-white text-xs font-bold rounded-lg shadow-sm transition">
+                    Sahkan Agensi &amp; Teruskan →
+                </button>
+            </div>
+        </div>
+    @else
+        @if ($this->applicationAgency)
+            <div class="mb-6 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs" wire:key="application-agency">
+                <p class="text-slate-700">
+                    <span class="font-semibold text-slate-500">{{ $this->isOnBehalf ? 'Permohonan bagi pihak:' : 'Jabatan/Agensi Permohonan:' }}</span>
+                    <span class="font-bold text-slate-900">{{ $this->applicationAgency->name }} ({{ $this->applicationAgency->code }})</span>
+                </p>
+                @if ($this->isOnBehalf)
+                    <button type="button" wire:click="changeAgency" wire:confirm="Tukar agensi sasaran? Pilihan Pegawai Bertanggungjawab akan dikosongkan." class="font-bold text-green-900 hover:underline">Tukar Agensi</button>
+                @endif
+            </div>
+        @endif
+        @error('targetAgencyId')
+            <div class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 text-xs rounded">{{ $message }}</div>
+        @enderror
 
     <!-- INCLUSION PARTIAL VIEWS (MENGIKUT 5 FASA) -->
     <div class="min-h-[350px]" wire:key="application-step-{{ $currentStep }}">
@@ -80,5 +126,6 @@
             @endif
         </div>
     </div>
+    @endif
 
 </div>

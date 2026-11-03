@@ -99,6 +99,14 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
+
+        // UM13: pautan "Tetapkan Kata Laluan" bagi akaun yang didaftar/diset semula oleh pentadbir.
+        'account_setup' => [
+            'provider' => 'users',
+            'table' => 'account_setup_tokens',
+            'expire' => 4320, // 72 jam
+            'throttle' => 0, // Had kadar dikawal oleh komponen pentadbir.
+        ],
     ],
 
     /*

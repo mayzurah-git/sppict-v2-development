@@ -1,11 +1,6 @@
-{{-- Status tempoh penerimaan permohonan Mesyuarat JTICT. $meeting: Meeting|null --}}
-@if ($meeting && ! $meeting->isOpenForSubmission())
-    {{-- Perlu Pindaan: dihantar semula ke mesyuarat asal walaupun tempohnya telah tutup --}}
-    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
-        <p class="font-bold">↺ Penghantaran semula pindaan untuk {{ $meeting->label() }}</p>
-        <p class="mt-0.5">Permohonan ini kekal pada mesyuarat asalnya dan boleh dihantar semula selepas pindaan dibuat.</p>
-    </div>
-@elseif ($meeting)
+{{-- Status tempoh penerimaan permohonan Mesyuarat JTICT. $meeting: Meeting|null (mesyuarat yang sedang dibuka).
+     PP2: permohonan Tidak Lengkap tidak lagi dihantar ke mesyuarat yang telah ditutup. --}}
+@if ($meeting)
     <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
         <p class="font-bold">✅ Permohonan dibuka untuk {{ $meeting->label() }}</p>
         <p class="mt-0.5">

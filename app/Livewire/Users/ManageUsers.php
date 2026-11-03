@@ -5,6 +5,8 @@ namespace App\Livewire\Users;
 use App\Enums\UserStatus;
 use App\Livewire\Concerns\HandlesUserDeactivation;
 use App\Livewire\Concerns\HandlesUserProfileFields;
+use App\Livewire\Concerns\ResendsAccountSetupLinks;
+use App\Models\Agency;
 use App\Models\User;
 use App\Support\RoleChangeAudit;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,6 +25,7 @@ use Livewire\WithPagination;
  * - Urus Setia hanya boleh menukar PERANAN antara Pengurusan ↔ Pengguna Biasa. Peranan Urus Setia
  *   hanya boleh diubah oleh Superadmin.
  * - UM11: Urus Setia boleh menyahaktifkan (sebab wajib) dan mengaktifkan semula pengguna dalam skop.
+ * - UM13: Jana Semula pautan Tetapkan Kata Laluan bagi pengguna Aktif yang belum pernah log masuk.
  * - Kata laluan dan medan kelulusan tidak diurus di sini.
  */
 #[Layout('layouts.app')]
@@ -30,6 +33,7 @@ class ManageUsers extends Component
 {
     use HandlesUserDeactivation;
     use HandlesUserProfileFields;
+    use ResendsAccountSetupLinks;
     use WithPagination;
 
     /**
@@ -49,6 +53,7 @@ class ManageUsers extends Component
     public string $search = '';
     public string $roleFilter = '';
     public string $statusFilter = '';
+    public string $agencyFilter = '';
     public bool $showModal = false;
 
     #[Locked]
@@ -72,6 +77,11 @@ class ManageUsers extends Component
     }
 
     public function updatingStatusFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingAgencyFilter(): void
     {
         $this->resetPage();
     }
@@ -220,6 +230,7 @@ class ManageUsers extends Component
             ->when(array_key_exists($this->roleFilter, self::EDITABLE_ROLES), function ($query): void {
                 $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('name', $this->roleFilter));
             })
+            ->when(ctype_digit($this->agencyFilter), fn ($query) => $query->where('agency_id', (int) $this->agencyFilter))
             ->orderBy('name')
             ->paginate(10);
 
@@ -235,6 +246,11 @@ class ManageUsers extends Component
             'users' => $users,
             'roleOptions' => $roleOptions,
             'roleLabels' => self::EDITABLE_ROLES,
+            // Penapis: termasuk agensi tidak aktif yang masih mempunyai pengguna dalam skop.
+            'agencyFilterOptions' => Agency::query()
+                ->whereIn('id', $this->scopedUsers()->whereNotNull('agency_id')->select('agency_id'))
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 }

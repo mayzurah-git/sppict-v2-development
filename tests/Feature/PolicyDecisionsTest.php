@@ -12,6 +12,7 @@ use App\Models\Grade;
 use App\Models\Position;
 use App\Models\ServiceScheme;
 use App\Models\User;
+use App\Notifications\AccountSetupLink;
 use App\Support\TemporaryPassword;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoAccountsSeeder;
@@ -22,6 +23,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password as PasswordBroker;
 use Livewire\Livewire;
 use Livewire\Volt\Volt;
@@ -63,8 +65,10 @@ class PolicyDecisionsTest extends TestCase
         }
     }
 
-    public function test_urus_setia_and_superadmin_temporary_passwords_satisfy_policy(): void
+    public function test_urus_setia_and_superadmin_send_setup_links_instead_of_showing_passwords(): void
     {
+        Notification::fake();
+
         $this->seed(GradeSeeder::class);
         $scheme = ServiceScheme::create(['code' => 'F', 'name' => 'Teknologi Maklumat', 'is_active' => true]);
         Position::create(['title' => 'Jawatan Legacy', 'is_active' => false]);
@@ -80,15 +84,15 @@ class PolicyDecisionsTest extends TestCase
             ->set('email', $email)->set('role', $role);
 
         $urusSetia = $this->userWithRole('pentadbir_urus_setia');
-        $byUrusSetia = $fill(Livewire::actingAs($urusSetia)->test(RegisterUser::class), 'a@ns.gov.my', '010101010101', 'pengguna_biasa')->call('save');
-        $this->assertTrue(TemporaryPassword::satisfiesPolicy($byUrusSetia->get('temporaryPassword')));
+        $fill(Livewire::actingAs($urusSetia)->test(RegisterUser::class), 'a@ns.gov.my', '010101010101', 'pengguna_biasa')->call('save');
+        Notification::assertSentTo(User::where('email', 'a@ns.gov.my')->firstOrFail(), AccountSetupLink::class, fn (AccountSetupLink $n) => ! $n->isReset);
 
         $superadmin = $this->userWithRole('superadmin');
-        $bySuperadmin = $fill(Livewire::actingAs($superadmin)->test(UserManagement::class)->call('openModal'), 'b@ns.gov.my', '020202020202', 'pentadbir_urus_setia')->call('saveUser');
-        $this->assertTrue(TemporaryPassword::satisfiesPolicy($bySuperadmin->get('temporaryPassword')));
+        $fill(Livewire::actingAs($superadmin)->test(UserManagement::class)->call('openModal'), 'b@ns.gov.my', '020202020202', 'pentadbir_urus_setia')->call('saveUser');
+        Notification::assertSentTo(User::where('email', 'b@ns.gov.my')->firstOrFail(), AccountSetupLink::class, fn (AccountSetupLink $n) => ! $n->isReset);
 
-        $reset = Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $urusSetia->uuid);
-        $this->assertTrue(TemporaryPassword::satisfiesPolicy($reset->get('temporaryPassword')));
+        Livewire::actingAs($superadmin)->test(UserManagement::class)->call('resetPassword', $urusSetia->uuid);
+        Notification::assertSentTo($urusSetia, AccountSetupLink::class, fn (AccountSetupLink $n) => $n->isReset);
     }
 
     public function test_profile_password_change_rejects_current_password_and_weak_passwords_with_malay_messages(): void
@@ -184,8 +188,15 @@ class PolicyDecisionsTest extends TestCase
     {
         $urusSetia = $this->userWithRole('pentadbir_urus_setia');
 
-        Livewire::actingAs($urusSetia)->test(ApplicationForm::class)
+        // PP3: Urus Setia mesti memilih & mengesahkan agensi sasaran sebelum menyimpan
+        $component = Livewire::actingAs($urusSetia)->test(ApplicationForm::class)
             ->set('form.title', 'Projek Urus Setia')
+            ->call('saveDraft')
+            ->assertHasErrors('targetAgencyId');
+        $this->assertSame(0, Application::count());
+
+        $component->set('targetAgencyId', $this->agency->id)
+            ->call('confirmAgency')
             ->call('saveDraft')
             ->assertHasNoErrors();
 
