@@ -163,13 +163,13 @@ new class extends Component
 
     public function with(): array
     {
-        $user = $this->currentUser()->load(['agency:id,name', 'positionRelation.serviceScheme', 'grade:id,code', 'roles:id,name']);
+        // Maklumat rujukan (No. KP, Jabatan, Jawatan, dll.) dipaparkan oleh profile.blade.php.
+        $user = $this->currentUser()->load(['grade:id,code', 'roles:id,name']);
         $position = $this->assignablePosition($user);
-        $role = $user->roles->first()?->name;
 
         return [
             'profile' => $user,
-            'roleLabel' => \App\Livewire\Admin\UserManagement::ROLE_LABELS[$role] ?? ($role ?: '-'),
+            'theme' => \App\Support\RoleTheme::for($user),
             'grades' => $position
                 ? $position->grades()->assignable()->orderByRaw('CAST(grades.code AS UNSIGNED)')->get(['grades.id', 'grades.code'])
                 : collect(),
@@ -178,110 +178,91 @@ new class extends Component
     }
 }; ?>
 
-<section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {{ __('Maklumat Profil') }}
-        </h2>
+@php
+    $field = 'block w-full h-11 rounded-xl border-slate-300 text-[15px] text-slate-900 shadow-none ' . $theme['input'];
+    $label = 'block text-[13px] font-bold text-slate-700';
+@endphp
 
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {{ __('Kemas kini nombor telefon, gred jawatan dan e-mel rasmi akaun anda.') }}
-        </p>
-    </header>
+<section aria-labelledby="tajuk-hubungan" class="bg-white border border-slate-200 rounded-[18px] overflow-hidden">
+    <form wire:submit="updateProfileInformation" novalidate>
+        <header class="px-6 pt-5">
+            <h2 id="tajuk-hubungan" class="text-[17px] font-extrabold text-slate-900">{{ __('Maklumat Hubungan') }}</h2>
+            <p class="mt-1 text-sm text-slate-600">{{ __('Kemas kini nombor telefon, gred jawatan dan e-mel rasmi akaun anda.') }}</p>
+        </header>
 
-    {{-- Maklumat rujukan (tidak boleh diubah melalui Profil) --}}
-    <dl class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('No. Kad Pengenalan') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100 font-mono">{{ $profile->no_kad_pengenalan ?? '-' }}</dd>
-        </div>
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('Nama') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100">{{ $profile->name }}</dd>
-        </div>
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('Jabatan/Agensi') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100">{{ $profile->agency?->name ?? '-' }}</dd>
-        </div>
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('Jawatan') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100">{{ $profile->positionRelation?->title ?? ($profile->getAttribute('position') ?: '-') }}</dd>
-        </div>
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('Skim Perkhidmatan') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100">
-                @if ($scheme = $profile->positionRelation?->serviceScheme){{ $scheme->code }} — {{ $scheme->name }}@else-@endif
-            </dd>
-        </div>
-        <div>
-            <dt class="text-gray-500 dark:text-gray-400">{{ __('Tahap Capaian') }}</dt>
-            <dd class="font-medium text-gray-900 dark:text-gray-100">{{ $roleLabel }}</dd>
-        </div>
-    </dl>
-    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-        {{ __('Untuk meminda maklumat di atas, sila hubungi Urus Setia.') }}
-    </p>
-
-    <form wire:submit="updateProfileInformation" class="mt-6 space-y-6" novalidate>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <x-input-label for="phone_office" :value="__('No. Telefon (Pejabat)')" />
-                <x-text-input wire:model="phone_office" id="phone_office" name="phone_office" type="tel" inputmode="numeric" maxlength="11" class="mt-1 block w-full" placeholder="cth. 067659999" />
-                <x-input-error class="mt-2" :messages="$errors->get('phone_office')" />
-            </div>
-            <div>
-                <x-input-label for="phone_mobile" :value="__('No. Telefon (HP)')" />
-                <x-text-input wire:model="phone_mobile" id="phone_mobile" name="phone_mobile" type="tel" inputmode="numeric" maxlength="11" class="mt-1 block w-full" placeholder="cth. 0123456789" />
-                <x-input-error class="mt-2" :messages="$errors->get('phone_mobile')" />
-            </div>
-        </div>
-        <p class="-mt-4 text-xs text-gray-500 dark:text-gray-400">{{ __('Digit sahaja, tanpa sengkang atau ruang.') }}</p>
-
-        <div>
-            <x-input-label for="grade_id" :value="__('Gred Jawatan')" />
-            <select wire:model="grade_id" id="grade_id" name="grade_id" @disabled(! $canChangeGrade)
-                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm disabled:bg-gray-100">
-                <option value="">{{ $canChangeGrade ? __('-- Pilih Gred --') : ($profile->grade?->code ?? '-') }}</option>
-                @foreach ($grades as $grade)
-                    <option value="{{ $grade->id }}">{{ $grade->code }}</option>
-                @endforeach
-            </select>
-            @unless ($canChangeGrade)
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('Gred tidak boleh dipilih kerana Jawatan anda belum dikemas kini. Sila hubungi Urus Setia.') }}</p>
-            @endunless
-            <x-input-error class="mt-2" :messages="$errors->get('grade_id')" />
-        </div>
-
-        <div>
-            <x-input-label for="email" :value="__('E-mel Rasmi')" />
-            <x-text-input wire:model="email" id="email" name="email" type="email" class="mt-1 block w-full" autocomplete="username" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
-
-            @if (auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
-                <div>
-                    <p class="text-sm mt-2 text-gray-800 dark:text-gray-200">
-                        {{ __('Alamat e-mel anda belum disahkan.') }}
-
-                        <button wire:click.prevent="sendVerification" class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                            {{ __('Klik di sini untuk menghantar semula e-mel pengesahan.') }}
-                        </button>
-                    </p>
-
-                    @if (session('status') === 'verification-link-sent')
-                        <p class="mt-2 font-medium text-sm text-green-600 dark:text-green-400">
-                            {{ __('Pautan pengesahan baharu telah dihantar ke alamat e-mel anda.') }}
-                        </p>
-                    @endif
+        <div class="px-6 pt-5 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-[18px]">
+            <div class="space-y-1.5">
+                <label for="phone_office" class="{{ $label }}">{{ __('No. Telefon (Pejabat)') }}</label>
+                <div class="relative">
+                    <svg aria-hidden="true" class="pointer-events-none absolute left-3.5 top-[13px] w-[18px] h-[18px] text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" /></svg>
+                    <input wire:model="phone_office" id="phone_office" name="phone_office" type="tel" inputmode="numeric" maxlength="11" placeholder="cth. 067659999" class="{{ $field }} pl-10 tabular-nums" />
                 </div>
-            @endif
+                <x-input-error :messages="$errors->get('phone_office')" />
+            </div>
+            <div class="space-y-1.5">
+                <label for="phone_mobile" class="{{ $label }}">{{ __('No. Telefon (HP)') }}</label>
+                <div class="relative">
+                    <svg aria-hidden="true" class="pointer-events-none absolute left-3.5 top-[13px] w-[18px] h-[18px] text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5" /><path d="M11 18h2" /></svg>
+                    <input wire:model="phone_mobile" id="phone_mobile" name="phone_mobile" type="tel" inputmode="numeric" maxlength="11" placeholder="cth. 0123456789" class="{{ $field }} pl-10 tabular-nums" />
+                </div>
+                <x-input-error :messages="$errors->get('phone_mobile')" />
+            </div>
+            <p class="sm:col-span-2 -mt-2 text-xs text-slate-500">{{ __('Digit sahaja, bermula dengan 0, tanpa sengkang atau ruang.') }}</p>
+
+            <div class="space-y-1.5">
+                <label for="grade_id" class="{{ $label }}">{{ __('Gred Jawatan') }}</label>
+                <select wire:model="grade_id" id="grade_id" name="grade_id" @disabled(! $canChangeGrade)
+                    class="{{ $field }} disabled:bg-slate-100 disabled:text-slate-500">
+                    <option value="">{{ $canChangeGrade ? __('-- Pilih Gred --') : ($profile->grade?->code ?? '-') }}</option>
+                    @foreach ($grades as $grade)
+                        <option value="{{ $grade->id }}">{{ $grade->code }}</option>
+                    @endforeach
+                </select>
+                @if ($canChangeGrade)
+                    <p class="text-xs text-slate-500">{{ __('Hanya gred yang dipautkan kepada Jawatan anda.') }}</p>
+                @else
+                    <p class="text-xs text-slate-500">{{ __('Gred tidak boleh dipilih kerana Jawatan anda belum dikemas kini. Sila hubungi Urus Setia.') }}</p>
+                @endif
+                <x-input-error :messages="$errors->get('grade_id')" />
+            </div>
+
+            <div class="space-y-1.5">
+                <label for="email" class="{{ $label }}">{{ __('E-mel Rasmi') }}</label>
+                <div class="relative">
+                    <svg aria-hidden="true" class="pointer-events-none absolute left-3.5 top-[13px] w-[18px] h-[18px] text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+                    <input wire:model="email" id="email" name="email" type="email" autocomplete="username" class="{{ $field }} pl-10" />
+                </div>
+                <x-input-error :messages="$errors->get('email')" />
+
+                @if (auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
+                    <div>
+                        <p class="text-sm mt-2 text-slate-800">
+                            {{ __('Alamat e-mel anda belum disahkan.') }}
+
+                            <button wire:click.prevent="sendVerification" class="underline text-sm text-slate-600 hover:text-slate-900 rounded-md focus:outline-none focus-visible:ring-2 {{ $theme['focus'] }}">
+                                {{ __('Klik di sini untuk menghantar semula e-mel pengesahan.') }}
+                            </button>
+                        </p>
+
+                        @if (session('status') === 'verification-link-sent')
+                            <p class="mt-2 font-medium text-sm text-green-700">
+                                {{ __('Pautan pengesahan baharu telah dihantar ke alamat e-mel anda.') }}
+                            </p>
+                        @endif
+                    </div>
+                @endif
+            </div>
         </div>
 
-        <div class="flex items-center gap-4">
-            <x-primary-button wire:loading.attr="disabled" wire:target="updateProfileInformation">{{ __('Simpan') }}</x-primary-button>
-
-            <x-action-message class="me-3 text-emerald-700" on="profile-updated">
+        <div class="px-6 py-3.5 bg-slate-50/70 border-t border-slate-100 flex flex-wrap items-center justify-end gap-3">
+            <x-action-message class="me-auto inline-flex items-center gap-1.5 text-sm font-bold text-green-700" on="profile-updated">
+                <svg aria-hidden="true" class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
                 {{ __('Profil berjaya dikemas kini.') }}
             </x-action-message>
+            <button type="submit" wire:loading.attr="disabled" wire:target="updateProfileInformation"
+                class="min-h-11 px-6 rounded-xl text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 {{ $theme['button'] }}">
+                {{ __('Kemaskini') }}
+            </button>
         </div>
     </form>
 </section>

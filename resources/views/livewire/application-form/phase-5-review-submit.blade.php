@@ -1,17 +1,14 @@
 <div class="space-y-6" wire:key="phase-5-form">
-    <div class="border-b pb-2">
-        <h3 class="text-lg font-semibold text-gray-700">Fasa 5: Pegawai Bertanggungjawab & Semakan Akhir</h3>
-        <p class="text-xs text-gray-500">Sila sahkan maklumat pegawai untuk dihubungi sebelum membuat penyerahan rasmi.</p>
-    </div>
-
-    <!-- STATUS MESYUARAT JTICT -->
+    <!-- Mesyuarat JTICT bagi penghantaran semula (status tempoh semasa dipaparkan di kepala halaman) -->
     @if ($this->requiresMeetingSelection)
         {{-- PP2: mesyuarat asal permohonan Tidak Lengkap tidak lagi dibuka; pemohon mesti memilih mesyuarat aktif --}}
         @if ($this->eligibleMeetings->isNotEmpty())
-            <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-2">
-                <p class="font-bold">↺ Pilih Mesyuarat JTICT untuk penghantaran semula</p>
-                <p>Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan. Sila pilih Mesyuarat JTICT yang sedang dibuka.</p>
-                <x-form.select label="Mesyuarat JTICT" wire:model.live="resubmissionMeetingId" :error="$errors->first('resubmissionMeetingId')" required>
+            <div class="p-4 rounded-xl border space-y-3 {{ $theme['panel'] }}">
+                <div>
+                    <p class="text-sm font-extrabold">Pilih Mesyuarat JTICT untuk penghantaran semula</p>
+                    <p class="mt-0.5 text-[13px]">Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan. Sila pilih Mesyuarat JTICT yang sedang dibuka.</p>
+                </div>
+                <x-form.select size="lg" :focus="$theme['input']" label="Mesyuarat JTICT" wire:model.live="resubmissionMeetingId" :error="$errors->first('resubmissionMeetingId')" required>
                     <option value="">-- Pilih Mesyuarat JTICT --</option>
                     @foreach ($this->eligibleMeetings as $meeting)
                         <option value="{{ $meeting->id }}">{{ $meeting->label() }} (tutup {{ $meeting->submission_closes_at->format('d/m/Y') }})</option>
@@ -19,96 +16,85 @@
                 </x-form.select>
             </div>
         @else
-            <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                <p class="font-bold">⏸ Tiada Mesyuarat JTICT aktif untuk penghantaran semula</p>
+            <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900">
+                <p class="text-sm font-extrabold">Tiada Mesyuarat JTICT aktif untuk penghantaran semula</p>
                 <p class="mt-0.5">Mesyuarat JTICT asal permohonan ini tidak lagi menerima permohonan dan tiada Mesyuarat JTICT lain yang dibuka. Anda boleh menyimpan pindaan dan menghantar semula apabila Mesyuarat JTICT dibuka oleh Urus Setia.</p>
             </div>
         @endif
-    @else
-        @if ($this->isAmendment && $this->targetMeeting)
-            <p class="text-xs font-semibold text-blue-800">↺ Penghantaran semula pindaan ke mesyuarat asal permohonan.</p>
-        @endif
-        @include('livewire.partials.jtict-status', ['meeting' => $this->targetMeeting])
+    @elseif (($this->isAmendment || $this->preJtictAmendmentDecision) && $this->targetMeeting)
+        <p class="text-[13px] font-bold {{ $theme['eyebrow'] }}">Penghantaran semula pindaan ke mesyuarat asal permohonan ({{ $this->targetMeeting->label() }}).</p>
     @endif
 
-    <!-- RINGKASAN KOS (SEMAKAN AKHIR) -->
-    @php($summary = $form->costSummary())
-    <div class="p-4 bg-gray-50 border rounded-lg">
-        <h4 class="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3">Ringkasan Kos Projek</h4>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-            <div>
-                <p class="text-[11px] text-gray-500">Anggaran Kos Siling</p>
-                <p class="font-bold text-gray-800">RM {{ number_format($summary['ceiling'], 2) }}</p>
-            </div>
-            <div>
-                <p class="text-[11px] text-gray-500">Anggaran Kos Projek</p>
-                <p class="font-bold text-gray-800">RM {{ number_format($summary['estimated'], 2) }}</p>
-            </div>
-            <div>
-                <p class="text-[11px] text-gray-500">Jumlah Kecil</p>
-                <p class="font-bold text-gray-800">RM {{ number_format($summary['subtotal'], 2) }}</p>
-            </div>
-            <div>
-                <p class="text-[11px] text-gray-500">SST ({{ rtrim(rtrim(number_format($summary['sst_rate'], 2), '0'), '.') }}%)</p>
-                <p class="font-bold text-gray-800">RM {{ number_format($summary['sst_amount'], 2) }}</p>
-            </div>
-            <div>
-                <p class="text-[11px] text-gray-500">Jumlah Keseluruhan</p>
-                <p class="font-black {{ $summary['ceiling_balance'] < 0 ? 'text-red-600' : 'text-emerald-600' }}">RM {{ number_format($summary['total'], 2) }}</p>
-            </div>
-        </div>
-    </div>
+    @php
+        $candidates = $this->officerCandidates;
+    @endphp
 
-    @php($candidates = $this->officerCandidates)
-
-    <!-- PEGAWAI UTAMA -->
-    <div class="p-4 bg-gray-50 border rounded-lg space-y-4">
-        <h4 class="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
-            Pegawai Utama / Pengurus Projek
-        </h4>
-
-        <x-form.select label="Pilih Pegawai Utama" wire:model.live="form.primary_officer_id" :error="$errors->first('form.primary_officer_id')" required>
-            <option value="">-- Pilih pegawai berdaftar dalam agensi --</option>
-            @foreach ($candidates as $candidate)
-                <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ $candidate->email }})</option>
-            @endforeach
-        </x-form.select>
-
-        @include('livewire.application-form.partials.officer-card', ['officer' => $candidates->find($form->primary_officer_id)])
-    </div>
-
-    <!-- TOGGLE CHECKBOX PEGAWAI KEDUA -->
-    <div class="p-3 bg-gray-100 rounded-lg border border-gray-200">
-        <label class="inline-flex items-center cursor-pointer">
-            <input type="checkbox" wire:model.live="form.has_secondary_officer" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500">
-            <span class="ml-2 text-xs font-bold text-gray-700">Tambah Pegawai Kedua / Alternatif (Pilihan)</span>
-        </label>
-        <p class="text-[11px] text-gray-500 mt-0.5 ml-6">Pegawai kedua boleh membantu mengisi kemajuan projek dan menjadi rujukan sekiranya Pegawai Utama tidak dapat dihubungi.</p>
-    </div>
-
-    <!-- PEGAWAI KEDUA (DYNAMIC) -->
-    @if ($form->has_secondary_officer)
-        <div class="p-4 bg-blue-50/50 border border-blue-200 rounded-lg space-y-4">
-            <h4 class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                Pegawai Kedua / Alternatif
-            </h4>
-
-            <x-form.select label="Pilih Pegawai Kedua" wire:model.live="form.secondary_officer_id" :error="$errors->first('form.secondary_officer_id')" required>
+    <!-- Pegawai Bertanggungjawab -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="space-y-3">
+            <x-form.select size="lg" :focus="$theme['input']" label="Pegawai Utama / Pengurus Projek" wire:model.live="form.primary_officer_id" :error="$errors->first('form.primary_officer_id')" required>
                 <option value="">-- Pilih pegawai berdaftar dalam agensi --</option>
                 @foreach ($candidates as $candidate)
-                    @continue((string) $candidate->id === (string) $form->primary_officer_id)
                     <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ $candidate->email }})</option>
                 @endforeach
             </x-form.select>
-
-            @include('livewire.application-form.partials.officer-card', ['officer' => $candidates->find($form->secondary_officer_id)])
+            @include('livewire.application-form.partials.officer-card', ['officer' => $candidates->find($form->primary_officer_id)])
         </div>
-    @endif
 
-    <p class="text-[11px] text-gray-500">
+        <div class="space-y-3">
+            <label class="flex items-start gap-2.5 min-h-[22px] cursor-pointer">
+                <input type="checkbox" wire:model.live="form.has_secondary_officer" class="mt-0.5 w-[18px] h-[18px] rounded border-slate-300 {{ $theme['input'] }}">
+                <span>
+                    <span class="block text-[13px] font-bold text-slate-700">Tambah Pegawai Kedua / Alternatif (Pilihan)</span>
+                    <span class="block text-xs text-slate-500 mt-0.5">Pegawai kedua boleh membantu mengisi kemajuan projek dan menjadi rujukan sekiranya Pegawai Utama tidak dapat dihubungi.</span>
+                </span>
+            </label>
+
+            @if ($form->has_secondary_officer)
+                <x-form.select size="lg" :focus="$theme['input']" label="Pegawai Kedua / Alternatif" wire:model.live="form.secondary_officer_id" :error="$errors->first('form.secondary_officer_id')" required>
+                    <option value="">-- Pilih pegawai berdaftar dalam agensi --</option>
+                    @foreach ($candidates as $candidate)
+                        @continue((string) $candidate->id === (string) $form->primary_officer_id)
+                        <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ $candidate->email }})</option>
+                    @endforeach
+                </x-form.select>
+                @include('livewire.application-form.partials.officer-card', ['officer' => $candidates->find($form->secondary_officer_id)])
+            @endif
+        </div>
+    </div>
+
+    <p class="text-xs text-slate-500">
         Maklumat jawatan, e-mel dan telefon diambil daripada profil pengguna. Pegawai yang tiada dalam senarai perlu didaftarkan terlebih dahulu dalam SPPICT.
         Selepas permohonan dihantar, pertukaran pegawai dibuat melalui halaman paparan permohonan dan sejarahnya akan direkodkan.
     </p>
+
+    <!-- Semakan akhir -->
+    @php
+        $summary = $form->costSummary();
+        $method = $this->procurementMethodOptions->firstWhere('id', (int) $form->procurement_method_id)?->name;
+        $documentCount = collect([
+            $this->existingDocuments->has('PROPOSAL_PAPER') || is_object($form->proposal_paper),
+            $this->existingDocuments->has('PRESENTATION_SLIDE_JTICT') || is_object($form->presentation_slide),
+        ])->filter()->count();
+        $review = [
+            ['label' => 'Nama Projek', 'value' => $form->title ?: '-', 'step' => 1],
+            ['label' => 'Kaedah Perolehan', 'value' => collect([$method, filled($form->expected_duration_months) ? $form->expected_duration_months . ' bulan' : null])->filter()->implode(' · ') ?: '-', 'step' => 2],
+            ['label' => 'Jumlah Keseluruhan', 'value' => 'RM ' . number_format($summary['total'], 2), 'step' => 3],
+            ['label' => 'Dokumen', 'value' => $documentCount . ' daripada 2 dimuat naik', 'step' => 4],
+        ];
+    @endphp
+    <section aria-labelledby="tajuk-semakan" class="border border-slate-200 rounded-xl overflow-hidden">
+        <h3 id="tajuk-semakan" class="px-4 py-3 bg-slate-50 border-b border-slate-100 text-[13px] font-extrabold {{ $theme['eyebrow'] }}">Semakan akhir sebelum dihantar</h3>
+        <dl class="grid grid-cols-1 sm:grid-cols-2">
+            @foreach ($review as $row)
+                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+                    <div class="min-w-0">
+                        <dt class="text-xs font-semibold text-slate-500">{{ $row['label'] }}</dt>
+                        <dd class="mt-0.5 text-sm font-bold text-slate-900 break-words">{{ $row['value'] }}</dd>
+                    </div>
+                    <button type="button" wire:click="goToStep({{ $row['step'] }})" class="shrink-0 min-h-9 px-2 rounded-lg text-[13px] font-extrabold hover:bg-slate-50 {{ $theme['link'] }}">Ubah<span class="sr-only"> {{ $row['label'] }}</span></button>
+                </div>
+            @endforeach
+        </dl>
+    </section>
 </div>

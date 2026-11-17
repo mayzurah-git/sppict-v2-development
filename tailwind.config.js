@@ -10,6 +10,7 @@ export default {
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
         './app/Livewire/**/*.php',
+        './app/Support/RoleTheme.php',
     ],
 
     theme: {

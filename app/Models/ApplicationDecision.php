@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ApplicationDecision as Decision;
 use App\Enums\DecisionStage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -58,6 +59,16 @@ class ApplicationDecision extends Model
 
         static::updating(fn () => throw new LogicException('Rekod sejarah keputusan tidak boleh diubah.'));
         static::deleting(fn () => throw new LogicException('Rekod sejarah keputusan tidak boleh dipadam.'));
+    }
+
+    /**
+     * PP4.2: keputusan Pra JTICT muktamad (Diterima / Ditolak). Ditolak dengan Pindaan bukan muktamad:
+     * permohonan kembali ke senarai menunggu selepas dipinda dan disahkan Lengkap semula melalui PP2.
+     */
+    public function scopeFinalPreJtict(Builder $query): Builder
+    {
+        return $query->where('stage', DecisionStage::PreJtict->value)
+            ->whereIn('decision', [Decision::Accepted->value, Decision::Rejected->value]);
     }
 
     // --- RELATIONSHIPS ---

@@ -254,8 +254,8 @@ class ApplicationReviewTest extends TestCase
 
         $service->review($application, ApplicationStatus::NeedsAmendment, self::REMARKS, $this->urusSetia);
 
-        // Pemohon melihat ulasan dan pautan pindaan; nama penyemak tidak didedahkan
-        $this->actingAs($this->applicant)->get(route('application.view', $application->uuid))
+        // Pegawai Utama aktif melihat ulasan dan pautan pindaan; nama penyemak tidak didedahkan
+        $this->actingAs($this->officer)->get(route('application.view', $application->uuid))
             ->assertOk()
             ->assertSee(self::REMARKS)
             ->assertSee('Kemas Kini &amp; Hantar Semula', false)
@@ -263,8 +263,14 @@ class ApplicationReviewTest extends TestCase
             ->assertDontSee('Siti Urus Setia')
             ->assertDontSee('Tandakan Lengkap');
 
+        // Pendaftar yang bukan pegawai aktif hanya boleh melihat (keputusan pemilik sistem)
+        $this->actingAs($this->applicant)->get(route('application.view', $application->uuid))
+            ->assertOk()
+            ->assertSee(self::REMARKS)
+            ->assertDontSee('Kemas Kini &amp; Hantar Semula', false);
+
         // Borang pindaan memaparkan ulasan; mesyuarat asal masih dibuka -> dikekalkan
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid])
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid])
             ->assertSee(self::REMARKS)
             ->set('currentStep', 5)
             ->assertSee('Penghantaran semula pindaan ke mesyuarat asal');
@@ -277,12 +283,12 @@ class ApplicationReviewTest extends TestCase
 
         $resubmission = ApplicationReview::latest('id')->first();
         $this->assertTrue($resubmission->isResubmission());
-        $this->assertSame($this->applicant->id, $resubmission->user_id);
+        $this->assertSame($this->officer->id, $resubmission->user_id);
 
         // Semakan kedua: masih Tidak Lengkap (rekod baharu), kemudian dihantar semula & Lengkap
         $service->review($application, ApplicationStatus::NeedsAmendment, 'Kos seunit item kedua perlu disahkan semula.', $this->urusSetia);
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid])
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid])
             ->assertSee('Kos seunit item kedua perlu disahkan semula.');
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertHasNoErrors();
@@ -307,7 +313,7 @@ class ApplicationReviewTest extends TestCase
         $application = $this->amendmentApplication();
         $this->meeting->update(['submission_closes_at' => today()->subDay()]);
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid])
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid])
             ->set('currentStep', 5)
             ->assertSee('Tiada Mesyuarat JTICT aktif untuk penghantaran semula');
         $this->fillValidForm($component);
@@ -328,7 +334,7 @@ class ApplicationReviewTest extends TestCase
         $inactive = $this->openJtictMeeting(['series' => 'Bil. 3/2026', 'is_active' => false]);
         $jpict = $this->openJtictMeeting(['code' => 'JPICTNS', 'series' => 'Bil. 4/2026']);
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
 
         foreach ([$this->meeting->id, $inactive->id, $jpict->id, 999999] as $meetingId) {
@@ -341,7 +347,7 @@ class ApplicationReviewTest extends TestCase
         $this->assertSame($open->id, ApplicationReview::latest('id')->first()->jtict_meeting_id);
     }
 
-    public function test_only_owner_can_amend_incomplete_application(): void
+    public function test_only_active_officer_can_amend_incomplete_application(): void
     {
         $application = $this->amendmentApplication();
 
@@ -351,7 +357,10 @@ class ApplicationReviewTest extends TestCase
         $outsider = User::factory()->create(['agency_id' => $otherAgency->id]);
         $outsider->assignRole('pengguna_biasa');
 
-        $this->actingAs($this->applicant)->get(route('application.edit', $application->uuid))->assertOk();
+        $this->actingAs($this->officer)->get(route('application.edit', $application->uuid))->assertOk();
+        // Pendaftar yang bukan pegawai aktif hanya boleh melihat
+        $this->actingAs($this->applicant)->get(route('application.view', $application->uuid))->assertOk();
+        $this->actingAs($this->applicant)->get(route('application.edit', $application->uuid))->assertForbidden();
         $this->actingAs($colleague)->get(route('application.edit', $application->uuid))->assertForbidden();
         $this->actingAs($outsider)->get(route('application.edit', $application->uuid))->assertForbidden();
         $this->actingAs($this->urusSetia)->get(route('application.edit', $application->uuid))->assertForbidden();

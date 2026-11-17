@@ -2,15 +2,20 @@
 
 namespace App\Livewire;
 
+use App\Enums\ApplicationDecision;
 use App\Enums\ApplicationStatus;
+use App\Enums\DecisionStage;
 use App\Enums\OfficerEndReason;
 use App\Enums\OfficerRole;
 use App\Models\Application;
+use App\Models\ApplicationDecision as ApplicationDecisionRecord;
 use App\Models\ApplicationReview;
 use App\Models\User;
+use App\Services\ApplicationDecisionService;
 use App\Services\ApplicationReviewService;
 use App\Services\OfficerHandoverService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +39,18 @@ class ViewApplication extends Component
     public bool $showReviewModal = false;
     public string $reviewDecision = '';
     public string $reviewRemarks = '';
+
+    // --- PP4.2: KEPUTUSAN PRA JTICT (URUS SETIA) ---
+    public bool $showPreJtictModal = false;
+    public string $preJtictDecision = '';
+    public string $preJtictDate = '';
+    public string $preJtictRemarks = '';
+
+    // --- PP4.3A: KEPUTUSAN MESYUARAT JTICT (URUS SETIA) ---
+    public bool $showJtictModal = false;
+    public string $jtictDecision = '';
+    public string $jtictDate = '';
+    public string $jtictRemarks = '';
 
     public function mount(string $uuid): void
     {
@@ -144,6 +161,242 @@ class ViewApplication extends Component
         $this->showReviewModal = false;
         $this->reviewDecision = '';
         $this->reviewRemarks = '';
+
+        if ($message) {
+            session()->flash('review_message', $message);
+        }
+        if ($error) {
+            session()->flash('review_error', $error);
+        }
+    }
+
+    /**
+     * PP4.2: sejarah keputusan Pra JTICT (application_decisions, peringkat PRE_JTICT), terkini dahulu.
+     */
+    #[Computed]
+    public function preJtictDecisions(): Collection
+    {
+        return $this->application->decisions()
+            ->where('stage', DecisionStage::PreJtict->value)
+            ->with('decidedBy:id,name')
+            ->orderByDesc('decision_date')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * PP4.2: ulasan Pra JTICT "Ditolak dengan Pindaan" terkini untuk pemohon.
+     */
+    #[Computed]
+    public function preJtictAmendmentDecision(): ?ApplicationDecisionRecord
+    {
+        if ($this->application->statusEnum() !== ApplicationStatus::PreJtictAmendment) {
+            return null;
+        }
+
+        return $this->preJtictDecisions->first(fn (ApplicationDecisionRecord $record) => $record->decision === ApplicationDecision::AmendmentRequired);
+    }
+
+    /**
+     * PP4.2: tarikh terawal yang dibenarkan bagi keputusan Pra JTICT (tarikh PP2 terakhir mengesahkan Lengkap).
+     * Paparan sahaja; had sebenar disemak oleh ApplicationDecisionService.
+     */
+    #[Computed]
+    public function preJtictEarliestDate(): ?string
+    {
+        return $this->application->latestCompleteReview()->first()?->created_at?->toDateString();
+    }
+
+    public function openPreJtictModal(string $decision): void
+    {
+        $this->authorize('decidePreJtict', $this->application);
+
+        $this->preJtictDecision = $this->preJtictDecisionFrom($decision)->value;
+        $this->preJtictDate = ''; // Tarikh keputusan sebenar dimasukkan oleh Urus Setia (tiada nilai lalai)
+        $this->preJtictRemarks = '';
+        $this->resetErrorBag();
+        $this->showPreJtictModal = true;
+    }
+
+    public function closePreJtictModal(): void
+    {
+        $this->showPreJtictModal = false;
+        $this->resetErrorBag();
+    }
+
+    /**
+     * Semua validasi (keputusan, ulasan, tarikh), kebenaran dan peralihan status dibuat oleh
+     * ApplicationDecisionService dalam satu transaksi; komponen ini hanya memetakan ralat ke medan borang.
+     */
+    public function submitPreJtictDecision(ApplicationDecisionService $service): void
+    {
+        $decision = $this->preJtictDecisionFrom($this->preJtictDecision);
+
+        // Keputusan mungkin telah direkodkan (klik berganda / Urus Setia lain): kemas kini paparan, tiada rekod pendua.
+        $this->application->refresh();
+        if (Auth::user()->hasRole('pentadbir_urus_setia') && $this->application->statusEnum() !== ApplicationStatus::Complete) {
+            $this->finishPreJtict(error: 'Keputusan Pra JTICT bagi permohonan ini telah direkodkan atau permohonan tidak lagi menunggu keputusan.');
+
+            return;
+        }
+
+        $this->authorize('decidePreJtict', $this->application);
+
+        try {
+            $service->decide(
+                $this->application,
+                DecisionStage::PreJtict,
+                $decision,
+                $this->preJtictRemarks,
+                $this->preJtictDate !== '' ? $this->preJtictDate : null,
+                Auth::user(),
+            );
+        } catch (ValidationException $e) {
+            $fields = ['decision' => 'preJtictDecision', 'remarks' => 'preJtictRemarks', 'decisionDate' => 'preJtictDate'];
+
+            throw ValidationException::withMessages(collect($e->errors())
+                ->mapWithKeys(fn (array $messages, string $key) => [$fields[$key] ?? 'preJtictDecision' => $messages])
+                ->all());
+        } catch (AuthorizationException) {
+            $this->finishPreJtict(error: 'Keputusan Pra JTICT tidak boleh direkodkan bagi permohonan ini pada status semasa.');
+
+            return;
+        }
+
+        $this->finishPreJtict(message: match ($decision) {
+            ApplicationDecision::Accepted => 'Keputusan Pra JTICT direkodkan: Diterima. Permohonan dibawa ke peringkat Mesyuarat JTICT.',
+            ApplicationDecision::AmendmentRequired => 'Keputusan Pra JTICT direkodkan: Ditolak dengan Pindaan. Permohonan dikembalikan kepada pemohon untuk pindaan.',
+            default => 'Keputusan Pra JTICT direkodkan: Ditolak. Permohonan ditutup.',
+        });
+    }
+
+    private function preJtictDecisionFrom(string $value): ApplicationDecision
+    {
+        $decision = ApplicationDecision::tryFrom($value);
+        abort_unless($decision?->stage() === DecisionStage::PreJtict, 422);
+
+        return $decision;
+    }
+
+    private function finishPreJtict(?string $message = null, ?string $error = null): void
+    {
+        $this->application->refresh();
+        unset($this->preJtictDecisions, $this->preJtictAmendmentDecision, $this->preJtictEarliestDate, $this->preJtictAcceptanceBlocker);
+        $this->showPreJtictModal = false;
+        $this->preJtictDecision = '';
+        $this->preJtictDate = '';
+        $this->preJtictRemarks = '';
+
+        if ($message) {
+            session()->flash('review_message', $message);
+        }
+        if ($error) {
+            session()->flash('review_error', $error);
+        }
+    }
+
+    /**
+     * PP4.3A (PP42B-01): sebab butang Pra JTICT "Diterima" dinyahdayakan; null jika mesyuarat sah.
+     * Paparan sahaja; sekatan sebenar dibuat oleh ApplicationDecisionService.
+     */
+    #[Computed]
+    public function preJtictAcceptanceBlocker(): ?string
+    {
+        return $this->application->statusEnum() === ApplicationStatus::Complete
+            ? $this->application->preJtictAcceptanceBlocker()
+            : null;
+    }
+
+    /**
+     * PP4.3A: sebab keputusan JTICT belum boleh direkodkan (dipaparkan kepada Urus Setia bagi permohonan
+     * Dalam Proses JTICT); null jika sedia diputuskan atau tidak berkenaan.
+     */
+    #[Computed]
+    public function jtictPendingReason(): ?string
+    {
+        if ($this->application->statusEnum() !== ApplicationStatus::InJtict
+            || ! Auth::user()->can('viewJtictQueue', Application::class)) {
+            return null;
+        }
+
+        return $this->application->jtictMeetingBlocker();
+    }
+
+    public function openJtictModal(string $decision): void
+    {
+        $this->authorize('decideJtict', $this->application);
+
+        $this->jtictDecision = $this->jtictDecisionFrom($decision)->value;
+        $this->jtictDate = ''; // Tarikh keputusan sebenar dimasukkan oleh Urus Setia (tiada nilai lalai)
+        $this->jtictRemarks = '';
+        $this->resetErrorBag();
+        $this->showJtictModal = true;
+    }
+
+    public function closeJtictModal(): void
+    {
+        $this->showJtictModal = false;
+        $this->resetErrorBag();
+    }
+
+    /**
+     * Semua validasi (keputusan, ulasan, tarikh, mesyuarat), kebenaran dan peralihan status dibuat oleh
+     * ApplicationDecisionService dalam satu transaksi; komponen ini hanya memetakan ralat ke medan borang.
+     */
+    public function submitJtictDecision(ApplicationDecisionService $service): void
+    {
+        $decision = $this->jtictDecisionFrom($this->jtictDecision);
+
+        // Keputusan mungkin telah direkodkan (klik berganda / Urus Setia lain): kemas kini paparan, tiada rekod pendua.
+        $this->application->refresh();
+        if (Auth::user()->hasRole('pentadbir_urus_setia') && $this->application->statusEnum() !== ApplicationStatus::InJtict) {
+            $this->finishJtict(error: 'Keputusan Mesyuarat JTICT bagi permohonan ini telah direkodkan atau permohonan tidak lagi menunggu keputusan.');
+
+            return;
+        }
+
+        $this->authorize('decideJtict', $this->application);
+
+        try {
+            $service->decide(
+                $this->application,
+                DecisionStage::Jtict,
+                $decision,
+                $this->jtictRemarks,
+                $this->jtictDate !== '' ? $this->jtictDate : null,
+                Auth::user(),
+            );
+        } catch (ValidationException $e) {
+            $fields = ['decision' => 'jtictDecision', 'remarks' => 'jtictRemarks', 'decisionDate' => 'jtictDate'];
+
+            throw ValidationException::withMessages(collect($e->errors())
+                ->mapWithKeys(fn (array $messages, string $key) => [$fields[$key] ?? 'jtictDecision' => $messages])
+                ->all());
+        } catch (AuthorizationException) {
+            $this->finishJtict(error: 'Keputusan Mesyuarat JTICT tidak boleh direkodkan bagi permohonan ini pada status semasa.');
+
+            return;
+        }
+
+        $this->finishJtict(message: "Keputusan Mesyuarat JTICT direkodkan: {$decision->label()}. Permohonan ditutup dengan keputusan tersebut.");
+    }
+
+    private function jtictDecisionFrom(string $value): ApplicationDecision
+    {
+        $decision = ApplicationDecision::tryFrom($value);
+        abort_unless($decision?->stage() === DecisionStage::Jtict, 422);
+
+        return $decision;
+    }
+
+    private function finishJtict(?string $message = null, ?string $error = null): void
+    {
+        $this->application->refresh();
+        unset($this->jtictPendingReason);
+        $this->showJtictModal = false;
+        $this->jtictDecision = '';
+        $this->jtictDate = '';
+        $this->jtictRemarks = '';
 
         if ($message) {
             session()->flash('review_message', $message);

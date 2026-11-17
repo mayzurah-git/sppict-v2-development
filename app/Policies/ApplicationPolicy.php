@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Enums\ApplicationDecision;
 use App\Enums\ApplicationStatus;
+use App\Enums\DecisionStage;
 use App\Models\Application;
 use App\Models\User;
 
@@ -50,15 +51,22 @@ class ApplicationPolicy
     }
 
     /**
-     * Kemas kini permohonan & padam/ganti dokumen: hanya ketika permohonan berstatus Draf / Tidak Lengkap,
-     * oleh pemohon (pendaftar rekod) atau pegawai bertanggungjawab aktif (Utama / Kedua) yang masih
-     * dalam agensi permohonan (UAT PP3: pegawai agensi sasaran boleh meminda permohonan bagi pihak agensi).
+     * Kemas kini permohonan & padam/ganti dokumen: hanya ketika permohonan berstatus Draf / Tidak Lengkap /
+     * Pindaan Pra JTICT, oleh pegawai bertanggungjawab aktif (Utama / Kedua) yang masih dalam agensi
+     * permohonan. Pendaftar rekod (pemohon) hanya boleh menyunting semasa Draf; selepas dihantar,
+     * pendaftar atau pegawai asal yang telah diganti hanya boleh melihat (keputusan pemilik sistem).
      */
     public function update(User $user, Application $application): bool
     {
-        return $application->isEditable()
-            && ($user->id === $application->applicant_id
-                || ($this->inSameAgency($user, $application) && $application->isActiveOfficer($user)));
+        if (! $application->isEditable()) {
+            return false;
+        }
+
+        if ($application->statusEnum() === ApplicationStatus::Draft && $user->id === $application->applicant_id) {
+            return true;
+        }
+
+        return $this->inSameAgency($user, $application) && $application->isActiveOfficer($user);
     }
 
     /**
@@ -77,41 +85,65 @@ class ApplicationPolicy
     /**
      * PP4: rekod keputusan Pra JTICT (Diterima / Ditolak dengan Pindaan / Ditolak). Urus Setia sahaja,
      * bagi permohonan Lengkap (telah melepasi semakan PP2). Superadmin & Pengurusan tidak dibenarkan.
+     * PP4.2: permohonan lama tanpa Mesyuarat JTICT dikendalikan berasingan (tidak diputuskan di sini).
      */
     public function decidePreJtict(User $user, Application $application): bool
     {
         return $this->canRecordDecision($user)
-            && $application->statusEnum() === ApplicationStatus::Complete;
+            && ! $application->trashed()
+            && $application->statusEnum() === ApplicationStatus::Complete
+            && $application->jtict_meeting_id !== null;
+    }
+
+    /**
+     * PP4.2: senarai permohonan menunggu keputusan Pra JTICT. Peranan sama dengan decidePreJtict().
+     */
+    public function viewPreJtictQueue(User $user): bool
+    {
+        return $this->canRecordDecision($user);
     }
 
     /**
      * PP4: rekod keputusan Mesyuarat JTICT (Lulus / Tidak Lulus / Kaji Semula). Urus Setia sahaja,
      * bagi permohonan Dalam Proses JTICT yang keputusan Pra JTICT terkininya ialah Diterima.
+     * PP4.3A: belum ada keputusan JTICT, dan Mesyuarat JTICT sah serta telah berlangsung
+     * (Application::jtictMeetingBlocker(); `is_active` tidak disyaratkan).
      */
     public function decideJtict(User $user, Application $application): bool
     {
         return $this->canRecordDecision($user)
+            && ! $application->trashed()
             && $application->statusEnum() === ApplicationStatus::InJtict
-            && $application->latestPreJtictDecision()->first()?->decision === ApplicationDecision::Accepted;
+            && $application->latestPreJtictDecision()->first()?->decision === ApplicationDecision::Accepted
+            && ! $application->decisions()->where('stage', DecisionStage::Jtict->value)->exists()
+            && $application->jtictMeetingBlocker() === null;
+    }
+
+    /**
+     * PP4.3A: senarai keputusan Mesyuarat JTICT. Peranan sama dengan decideJtict().
+     */
+    public function viewJtictQueue(User $user): bool
+    {
+        return $this->canRecordDecision($user);
     }
 
     /**
      * Tukar Pegawai Bertanggungjawab selepas permohonan dihantar.
-     * Urus Setia sentiasa dibenarkan (jalan terakhir jika pegawai sudah bertukar keluar);
-     * pemohon atau pegawai aktif dibenarkan selagi masih dalam agensi yang sama.
+     * Urus Setia sentiasa dibenarkan (jalan terakhir jika pegawai sudah bertukar keluar, termasuk semasa
+     * Tidak Lengkap / Pindaan Pra JTICT supaya permohonan tidak tersangkut); pegawai aktif dibenarkan
+     * selagi masih dalam agensi yang sama. Pendaftar / pegawai asal yang telah diganti tidak dibenarkan.
      */
     public function manageOfficers(User $user, Application $application): bool
     {
-        if ($application->isEditable()) {
-            return false; // Semasa Draf / Tidak Lengkap, pegawai dikemas kini melalui borang permohonan
+        if ($application->statusEnum() === ApplicationStatus::Draft) {
+            return false; // Semasa Draf, pegawai dikemas kini melalui borang permohonan
         }
 
         if ($user->hasRole('pentadbir_urus_setia')) {
             return true;
         }
 
-        return $this->inSameAgency($user, $application)
-            && ($user->id === $application->applicant_id || $application->isActiveOfficer($user));
+        return $this->inSameAgency($user, $application) && $application->isActiveOfficer($user);
     }
 
     /**

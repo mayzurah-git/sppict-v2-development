@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * PP4: rekod keputusan Pra JTICT dan Mesyuarat JTICT oleh Urus Setia.
  *
- * PP4.1: belum dipanggil oleh mana-mana route / UI (diaktifkan dalam fasa antara muka).
+ * Dipanggil oleh ViewApplication (PP4.2: Pra JTICT; PP4.3A: JTICT).
  * Tiada e-mel dihantar, tiada rekod projek dicipta, dan lajur warisan jtict_decision tidak disentuh.
  */
 class ApplicationDecisionService
@@ -74,11 +74,22 @@ class ApplicationDecisionService
         ])->validate();
 
         $record = DB::transaction(function () use ($application, $stage, $decision, $remarks, $decisionDate, $user, $meetingId) {
-            $locked = Application::lockForUpdate()->findOrFail($application->id);
+            $locked = Application::withTrashed()->lockForUpdate()->findOrFail($application->id);
             $actor = User::findOrFail($user->id); // peranan & status akaun terkini
+
+            // PP4.3A: permohonan yang telah dipadam tidak boleh diputuskan (penolakan kebenaran yang jelas, bukan 404).
+            if ($locked->trashed()) {
+                throw new AuthorizationException('Permohonan ini telah dipadam dan tidak boleh diputuskan.');
+            }
 
             $ability = $stage === DecisionStage::PreJtict ? 'decidePreJtict' : 'decideJtict';
             $target = $decision->targetStatus();
+
+            // PP4.3A: bagi JTICT, halangan mesyuarat (belum berlangsung / tidak selaras) dipulangkan dengan sebab
+            // yang jelas apabila pengguna & permohonan selainnya layak; polisi decideJtict() menyemak syarat yang sama.
+            if ($stage === DecisionStage::Jtict && ($reason = $this->jtictMeetingReason($locked, $actor))) {
+                throw ValidationException::withMessages(['meetingId' => $reason]);
+            }
 
             if ($actor->cannot($ability, $locked)
                 || $locked->statusEnum() !== $stage->requiredStatus()
@@ -87,7 +98,7 @@ class ApplicationDecisionService
             }
 
             $meeting = $stage === DecisionStage::PreJtict
-                ? $this->validatePreJtict($locked, $decisionDate, $meetingId)
+                ? $this->validatePreJtict($locked, $decision, $decisionDate, $meetingId)
                 : $this->validateJtict($locked, $decisionDate, $meetingId);
 
             $record = ApplicationDecision::create([
@@ -135,10 +146,12 @@ class ApplicationDecisionService
     /**
      * Pra JTICT: tarikh keputusan tidak lebih awal daripada tarikh terakhir PP2 mengesahkan Lengkap.
      * Mesyuarat yang direkodkan = Mesyuarat JTICT permohonan pada masa keputusan (jika ada; tidak diubah).
+     * PP42B-01: "Diterima" hanya bagi Mesyuarat JTICT yang sah (Aktif, belum berlalu); Ditolak dengan
+     * Pindaan / Ditolak tidak terikat syarat mesyuarat.
      *
      * @throws ValidationException
      */
-    private function validatePreJtict(Application $application, string $decisionDate, ?int $meetingId): ?Meeting
+    private function validatePreJtict(Application $application, Decision $decision, string $decisionDate, ?int $meetingId): ?Meeting
     {
         $completedAt = $application->reviews()
             ->where('to_status', ApplicationStatus::Complete->value)
@@ -165,12 +178,34 @@ class ApplicationDecisionService
             ]);
         }
 
+        if ($decision === Decision::Accepted && ($reason = $application->preJtictAcceptanceBlocker())) {
+            throw ValidationException::withMessages([
+                'meetingId' => "{$reason} Keputusan Diterima tidak dibenarkan; gunakan Ditolak dengan Pindaan (pemohon menghantar semula ke Mesyuarat JTICT yang dibuka) atau Ditolak.",
+            ]);
+        }
+
         return $application->jtict_meeting_id ? Meeting::withTrashed()->find($application->jtict_meeting_id) : null;
     }
 
     /**
-     * JTICT: Mesyuarat JTICT permohonan mesti wujud (tidak dipadam) dan tarikh keputusan tidak lebih
-     * awal daripada tarikh mesyuarat.
+     * PP4.3A: sebab mesyuarat menghalang keputusan JTICT, hanya apabila pengguna berperanan layak dan
+     * permohonan berada pada peringkat JTICT (Dalam Proses JTICT, Pra JTICT terkini Diterima, tiada keputusan
+     * JTICT). Selain itu null: penolakan kebenaran umum dibuat oleh polisi.
+     */
+    private function jtictMeetingReason(Application $application, User $actor): ?string
+    {
+        $eligible = $actor->can('viewJtictQueue', Application::class)
+            && $application->statusEnum() === ApplicationStatus::InJtict
+            && $application->latestPreJtictDecision?->decision === Decision::Accepted
+            && ! $application->decisions()->where('stage', DecisionStage::Jtict->value)->exists();
+
+        return $eligible ? $application->jtictMeetingBlocker() : null;
+    }
+
+    /**
+     * JTICT: Mesyuarat JTICT permohonan mesti wujud (tidak dipadam), jenis JTICT, telah berlangsung dan
+     * tidak lebih awal daripada tarikh Pra JTICT Diterima (PP4.3A; `is_active` tidak disyaratkan);
+     * tarikh keputusan tidak lebih awal daripada tarikh mesyuarat.
      *
      * @throws ValidationException
      */
@@ -190,6 +225,10 @@ class ApplicationDecisionService
             throw ValidationException::withMessages([
                 'meetingId' => 'Mesyuarat tidak sepadan dengan Mesyuarat JTICT permohonan.',
             ]);
+        }
+
+        if ($reason = $application->jtictMeetingBlocker()) {
+            throw ValidationException::withMessages(['meetingId' => $reason]);
         }
 
         if ($decisionDate < $meeting->meeting_date->toDateString()) {

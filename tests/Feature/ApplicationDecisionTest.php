@@ -180,16 +180,17 @@ class ApplicationDecisionTest extends TestCase
 
     // --- I2. STATUS DAN KITARAN PINDAAN PRA JTICT ---
 
-    public function test_pre_jtict_amendment_status_is_editable_by_applicant_and_officer(): void
+    public function test_pre_jtict_amendment_status_is_editable_by_active_officer_only(): void
     {
         $application = $this->completeApplication();
         $this->decide($application, Decision::AmendmentRequired, self::REMARKS);
 
         $this->assertSame(ApplicationStatus::PreJtictAmendment->value, $application->status);
         $this->assertTrue($application->isEditable());
-        $this->assertTrue($this->applicant->can('update', $application));
         $this->assertTrue($this->officer->can('update', $application));
-        $this->assertFalse($this->urusSetia->can('update', $application), 'Urus Setia bukan pendaftar permohonan ini');
+        $this->assertFalse($this->applicant->can('update', $application), 'Pendaftar yang bukan pegawai aktif hanya boleh melihat');
+        $this->assertTrue($this->applicant->can('view', $application));
+        $this->assertFalse($this->urusSetia->can('update', $application), 'Urus Setia bukan pegawai bertanggungjawab permohonan ini');
         $this->assertSame('Pindaan Pra JTICT', $application->statusLabel());
     }
 
@@ -205,7 +206,7 @@ class ApplicationDecisionTest extends TestCase
         $this->assertFalse($application->requiresMeetingSelection());
         $this->assertTrue($application->targetJtictMeeting()->is($this->meeting));
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertHasNoErrors()->assertRedirect('/dashboard');
 
@@ -219,12 +220,12 @@ class ApplicationDecisionTest extends TestCase
         $this->assertSame(ApplicationStatus::PreJtictAmendment->value, $resubmission->from_status);
         $this->assertTrue($resubmission->isResubmission());
         $this->assertSame('Dihantar Semula', $resubmission->actionLabel());
-        $this->assertSame($this->applicant->id, $resubmission->user_id);
+        $this->assertSame($this->officer->id, $resubmission->user_id);
 
         // PP2 masih menyemak seperti biasa: Tidak Lengkap, pinda, kemudian Lengkap
         $review = app(ApplicationReviewService::class);
         $review->review($application, ApplicationStatus::NeedsAmendment, 'Lampirkan slaid pembentangan terkini.', $this->urusSetia);
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertHasNoErrors();
         $review->review($application->fresh(), ApplicationStatus::Complete, null, $this->urusSetia);
@@ -256,7 +257,7 @@ class ApplicationDecisionTest extends TestCase
         $this->assertTrue($application->requiresMeetingSelection());
         $this->assertNull($application->targetJtictMeeting(), 'Tidak dipindahkan secara automatik ke mesyuarat semasa');
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertHasErrors('resubmissionMeetingId');
         $this->assertSame(ApplicationStatus::PreJtictAmendment->value, $application->fresh()->status);
@@ -274,7 +275,7 @@ class ApplicationDecisionTest extends TestCase
         $this->decide($application, Decision::AmendmentRequired, self::REMARKS);
         $this->meeting->update(['submission_closes_at' => today()->subDay()]);
 
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertSee('permohonan kekal Pindaan Pra JTICT');
 
@@ -357,8 +358,7 @@ class ApplicationDecisionTest extends TestCase
 
     public function test_each_decision_sets_expected_status(): void
     {
-        $this->meeting->update(['meeting_date' => today()->subDay()]);
-
+        // PP4.3A (PP42B-01): keputusan Pra JTICT direkodkan sebelum mesyuarat berlangsung
         $expected = [
             [Decision::Accepted, null, 'IN_JTICT'],
             [Decision::AmendmentRequired, self::REMARKS, 'PRE_JTICT_AMENDMENT'],
@@ -370,6 +370,8 @@ class ApplicationDecisionTest extends TestCase
             $this->assertSame($status, $application->status, $decision->value);
             $this->assertSame(['COMPLETE', $status], [$record->from_status, $record->to_status]);
         }
+
+        $this->meeting->update(['meeting_date' => today()->subDay()]);
 
         foreach ([Decision::Approved, Decision::NotApproved, Decision::Review] as $decision) {
             $application = $this->acceptedApplication();
@@ -403,6 +405,8 @@ class ApplicationDecisionTest extends TestCase
         }
 
         // Diterima & Ditolak Pra JTICT: ulasan tidak wajib
+        // (PP4.3A / PP42B-01: Diterima memerlukan mesyuarat yang belum berlalu)
+        $this->meeting->update(['meeting_date' => today()->addDays(30)]);
         $this->assertNull($this->decide($this->completeApplication(), Decision::Accepted)->remarks);
         $this->assertNull($this->decide($this->completeApplication(), Decision::Rejected)->remarks);
     }
@@ -573,11 +577,14 @@ class ApplicationDecisionTest extends TestCase
         $bystanderBefore = $bystander->fresh()->getAttributes();
         $meetingBefore = $this->meeting->fresh()->getAttributes();
 
+        // PP4.3A (PP42B-01): Lengkap & Pra JTICT Diterima pada tarikh mesyuarat, keputusan JTICT selepasnya
+        $this->travelTo($this->meeting->fresh()->meeting_date->copy()->setTime(9, 0));
         $application = $this->completeApplication();
         $application->forceFill(['review_remarks' => 'Ulasan semakan PP2 asal.'])->save();
         $reviewsBefore = ApplicationReview::orderBy('id')->get()->toArray();
 
         $this->decide($application, Decision::Accepted);
+        $this->travelBack();
         $this->decide($application, Decision::Review, self::REMARKS);
 
         $application->refresh();
@@ -598,14 +605,28 @@ class ApplicationDecisionTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    public function test_no_decision_route_or_ui_is_exposed(): void
+    /**
+     * PP4.1 asal: tiada route / UI keputusan. PP4.2 mendedahkan keputusan Pra JTICT (/urus-setia/pra-jtict);
+     * PP4.3A mendedahkan senarai keputusan JTICT (/urus-setia/jtict). Keputusan (kedua-dua peringkat) hanya
+     * direkodkan melalui ViewApplication; tiada route keputusan lain atau tindakan pukal.
+     */
+    public function test_only_pre_jtict_and_jtict_decision_routes_and_ui_are_exposed(): void
     {
         foreach (Route::getRoutes() as $route) {
-            $this->assertDoesNotMatchRegularExpression('/keputusan|decision|pra-?jtict/i', $route->uri(), $route->uri());
+            if (in_array($route->uri(), ['urus-setia/pra-jtict', 'urus-setia/jtict'], true)) {
+                continue;
+            }
+
+            $this->assertDoesNotMatchRegularExpression('/keputusan|decision|jtict/i', $route->uri(), $route->uri());
         }
 
         foreach (array_merge(glob(app_path('Livewire/*.php')), glob(app_path('Livewire/*/*.php')), glob(app_path('Http/Controllers/*.php'))) as $file) {
-            $this->assertStringNotContainsString('ApplicationDecisionService', file_get_contents($file), $file);
+            $source = file_get_contents($file);
+
+            if (str_contains($source, 'DecisionStage::Jtict') || str_contains($source, 'decideJtict')
+                || str_contains($source, 'use App\Services\ApplicationDecisionService;')) {
+                $this->assertSame('ViewApplication.php', basename($file), $file);
+            }
         }
     }
 
@@ -673,17 +694,23 @@ class ApplicationDecisionTest extends TestCase
         return $application->fresh();
     }
 
+    /**
+     * PP4.3A (PP42B-01): Pra JTICT Diterima hanya dibenarkan sehingga tarikh mesyuarat, manakala keputusan
+     * JTICT hanya selepas mesyuarat berlangsung. Penerimaan direkodkan pada tarikh mesyuarat (masa disimulasi).
+     */
     private function acceptedApplication(): Application
     {
+        $this->travelTo($this->meeting->fresh()->meeting_date->copy()->setTime(9, 0));
         $application = $this->completeApplication();
         $this->decide($application, Decision::Accepted);
+        $this->travelBack();
 
         return $application;
     }
 
     private function resubmitAndComplete(Application $application): void
     {
-        $component = Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
+        $component = Livewire::actingAs($this->officer)->test(ApplicationForm::class, ['uuid' => $application->uuid]);
         $this->fillValidForm($component);
         $component->call('submitApplication')->assertHasNoErrors();
 

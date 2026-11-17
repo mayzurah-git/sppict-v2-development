@@ -71,7 +71,8 @@ class SelfProfileUpdateTest extends TestCase
 
         $this->actingAs($user)->get('/profile')
             ->assertOk()
-            ->assertSee('Maklumat Profil')
+            ->assertSee('Maklumat Rasmi')
+            ->assertSee('Maklumat Hubungan')
             ->assertSee($user->no_kad_pengenalan)
             ->assertSee('Pegawai Teknologi Maklumat')
             ->assertSee('F — Teknologi Maklumat')
@@ -294,6 +295,30 @@ class SelfProfileUpdateTest extends TestCase
         $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee(route('profile'), false)->assertSee('Profil');
         $this->actingAs($user)->get('/profile')->assertOk()->assertSeeVolt('profile.update-password-form');
         Auth::logout();
+    }
+
+    // Reka bentuk Profil: kepala profil, nota Urus Setia & warna ikut peranan.
+    public function test_profile_page_shows_header_and_follows_role_theme(): void
+    {
+        $pengguna = $this->profiled('pengguna_biasa', ['name' => 'Siti Pemohon']);
+
+        $this->actingAs($pengguna)->get('/profile')
+            ->assertOk()
+            ->assertSeeInOrder(['Profil Pengguna', 'Siti Pemohon', \App\Livewire\Admin\UserManagement::ROLE_LABELS['pengguna_biasa'], 'Jabatan Kerja Raya', 'Aktif'])
+            ->assertSee('Rujukan sahaja')
+            ->assertSee('Untuk mengemaskini maklumat di atas, sila hubungi Urus Setia.')
+            ->assertSee('Hanya gred yang dipautkan kepada Jawatan anda.')
+            ->assertSee('Syarat kata laluan')
+            ->assertSee('bg-sky-700', false)
+            ->assertSee('logo-jata-n9.png', false);
+
+        Volt::actingAs($pengguna)->test('profile.update-profile-information-form')->assertSee('Kemaskini');
+
+        $urusSetia = $this->profiled('pentadbir_urus_setia');
+        $this->actingAs($urusSetia)->get('/profile')
+            ->assertOk()
+            ->assertSee('bg-brand-dark', false)
+            ->assertDontSee('bg-sky-700', false);
     }
 
     // --- Helpers ---

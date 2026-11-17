@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\OfficerEndReason;
 use App\Enums\OfficerRole;
 use App\Models\Agency;
 use App\Models\Application;
@@ -17,6 +18,7 @@ use App\Models\ProcurementType;
 use App\Models\ProjectCategory;
 use App\Models\User;
 use App\Livewire\Forms\ApplicationForm;
+use App\Support\RichText;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
@@ -291,8 +293,9 @@ class ApplicationSubmissionService
         $application->fill([
             'title' => $form->title ?: 'Permohonan Tanpa Tajuk (Draf)',
             'application_category' => $form->application_category ?: null,
-            'objectives' => $form->objectives,
-            'project_scope' => $form->project_scope,
+            // Teks berformat (Trix): HTML dibersihkan sebelum disimpan.
+            'objectives' => filled($form->objectives) ? RichText::clean($form->objectives) : $form->objectives,
+            'project_scope' => filled($form->project_scope) ? RichText::clean($form->project_scope) : $form->project_scope,
             'procurement_type_id' => $procurementType?->id,
             'procurement_type' => $procurementType?->name,
             'procurement_method_id' => $procurementMethod?->id,
@@ -328,8 +331,9 @@ class ApplicationSubmissionService
 
     /**
      * Simpan Pegawai Bertanggungjawab (Fasa 5) semasa permohonan masih boleh disunting.
-     * Pada peringkat ini rekod aktif dikemas kini terus (tiada sejarah) kerana permohonan
-     * belum rasmi; selepas dihantar, pertukaran pegawai melalui OfficerHandoverService.
+     * Tugasan yang belum rasmi (tiada `started_at`, iaitu belum pernah dihantar) dikemas kini terus.
+     * Tugasan rasmi (permohonan Tidak Lengkap / Pindaan Pra JTICT) ditutup, bukan ditulis ganti,
+     * supaya pegawai asal kekal dalam sejarah; selepas dihantar, pertukaran melalui OfficerHandoverService.
      */
     private function syncOfficers(Application $application, ApplicationForm $form, $user, bool $submitting): void
     {
@@ -343,6 +347,17 @@ class ApplicationSubmissionService
         foreach ($assignments as $role => $userId) {
             $current = $application->officers()->active()->where('role', $role)->first();
             $officer = $userId ? $eligible->get((int) $userId) : null;
+
+            // Tugasan rasmi bagi pegawai lain: tutup dengan sejarah, kemudian cipta tugasan baharu
+            if ($current?->started_at && (int) $current->user_id !== $officer?->id) {
+                $current->update([
+                    'ended_at' => now()->toDateString(),
+                    'end_reason' => OfficerEndReason::Reassignment,
+                    'handover_remarks' => $officer ? 'Ditukar melalui borang permohonan semasa pindaan.' : 'Ditamatkan melalui borang permohonan semasa pindaan.',
+                    'ended_by' => $user->id,
+                ]);
+                $current = null;
+            }
 
             if (! $officer) {
                 $current?->delete();

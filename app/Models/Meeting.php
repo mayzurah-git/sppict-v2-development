@@ -141,6 +141,46 @@ class Meeting extends Model implements Auditable
         return filled($this->minutes_file_path);
     }
 
+    // --- PP4.3A: KEPUTUSAN PRA JTICT & JTICT ---
+
+    /**
+     * Mesyuarat jenis JTICT (Nama Mesyuarat bertanda "Terima Permohonan"); sama seperti skop jtict().
+     */
+    public function isJtict(): bool
+    {
+        return (bool) $this->meetingName?->accepts_applications;
+    }
+
+    /**
+     * Tarikh mesyuarat telah tiba atau berlalu. Sistem tiada medan pengesahan mesyuarat selesai,
+     * jadi tarikh mesyuarat digunakan sebagai kawalan bagi keputusan JTICT.
+     */
+    public function hasTakenPlace(): bool
+    {
+        return $this->meeting_date !== null && $this->meeting_date->lte(today());
+    }
+
+    /**
+     * PP42B-01: sebab mesyuarat ini tidak boleh menerima keputusan Pra JTICT "Diterima"; null jika sah.
+     * Syarat: tidak dipadam, jenis JTICT, Aktif dan tarikh mesyuarat hari ini atau akan datang.
+     */
+    public function preJtictAcceptanceBlocker(): ?string
+    {
+        return match (true) {
+            $this->trashed() => 'Mesyuarat JTICT permohonan ini telah dipadam.',
+            ! $this->isJtict() => 'Mesyuarat permohonan ini bukan Mesyuarat JTICT.',
+            ! $this->is_active => "Mesyuarat {$this->label()} tidak aktif.",
+            $this->meeting_date === null || $this->meeting_date->lt(today()) => "Mesyuarat {$this->label()} telah berlangsung"
+                . ($this->meeting_date ? " pada {$this->meeting_date->format('d/m/Y')}" : '') . '.',
+            default => null,
+        };
+    }
+
+    public function isValidForPreJtictAcceptance(): bool
+    {
+        return $this->exists && $this->preJtictAcceptanceBlocker() === null;
+    }
+
     /**
      * Ada permohonan (termasuk yang dipadam) yang dirujuk kepada mesyuarat ini sebagai JTICT atau JPICT?
      */

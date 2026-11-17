@@ -5,6 +5,8 @@ use Livewire\Volt\Volt;
 use App\Http\Controllers\ApplicationDocumentController;
 use App\Livewire\ApplicationForm;
 use App\Livewire\ViewApplication;
+use App\Livewire\PreJtictList;
+use App\Livewire\JtictList;
 use App\Livewire\Admin\AgencyManagement;
 use App\Livewire\Admin\UserManagement;
 use App\Livewire\Admin\AuditLog;
@@ -38,6 +40,9 @@ Route::view('profile', 'profile')
 // 'active': akaun menunggu kelulusan / ditolak tidak boleh mengakses modul dalaman.
 // 'password.changed': akaun dengan kata laluan sementara mesti menukarnya dahulu.
 Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(function () {
+    // Senarai Permohonan pemohon (menu Permohonan ▾ Pengguna Biasa).
+    Route::view('/permohonan', 'applications.index')->middleware('role:pengguna_biasa')->name('applications.index');
+
     // Permohonan Baharu
     // UM7A: hanya pengguna_biasa & pentadbir_urus_setia (ApplicationPolicy::create); `can` turut persistent dalam Livewire.
     Route::get('/application/new', ApplicationForm::class)->middleware('can:create,' . \App\Models\Application::class)->name('application.create');
@@ -51,6 +56,18 @@ Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(fun
 
     // Dokumen sokongan (storan private; kebenaran disemak melalui ApplicationPolicy@view).
     Route::get('/application/{applicationUuid}/documents/{documentUuid}', ApplicationDocumentController::class)->name('application.document');
+
+    // PP4.2: senarai permohonan menunggu keputusan Pra JTICT (Urus Setia sahaja; polisi viewPreJtictQueue
+    // menolak Superadmin & Pengurusan). Keputusan direkodkan di halaman butiran permohonan.
+    Route::get('/urus-setia/pra-jtict', PreJtictList::class)
+        ->middleware(['role:pentadbir_urus_setia', 'can:viewPreJtictQueue,' . \App\Models\Application::class])
+        ->name('pre-jtict.index');
+
+    // PP4.3A: senarai keputusan Mesyuarat JTICT (Urus Setia sahaja; polisi viewJtictQueue). Keputusan
+    // direkodkan di halaman butiran permohonan; tiada tindakan pukal.
+    Route::get('/urus-setia/jtict', JtictList::class)
+        ->middleware(['role:pentadbir_urus_setia', 'can:viewJtictQueue,' . \App\Models\Application::class])
+        ->name('jtict.index');
 
     Route::get('/admin/agencies', AgencyManagement::class)->middleware('role:pentadbir_urus_setia')->name('admin.agencies');
 

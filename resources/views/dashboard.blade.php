@@ -1,5 +1,5 @@
 <x-app-layout>
-    <div class="py-8 bg-brand-canvas min-h-screen">
+    <div @class(['py-8 min-h-screen', 'bg-sky-50/60' => auth()->user()->hasRole('pengguna_biasa'), 'bg-brand-canvas' => ! auth()->user()->hasRole('pengguna_biasa')])>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
             @hasrole('superadmin')
                 @php
@@ -43,8 +43,10 @@
                     </div>
                 </section>
             @else
-                @hasrole('pentadbir_urus_setia')
+                @if (auth()->user()->hasRole('pentadbir_urus_setia'))
                     @include('dashboard.urus-setia')
+                @elseif (auth()->user()->hasRole('pengguna_biasa'))
+                    @include('dashboard.pengguna')
                 @else
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                         <div><h2 class="text-2xl font-black text-slate-900 tracking-tight">Sistem Permohonan Projek ICT (SPPICT) v2</h2><p class="text-xs text-slate-500 mt-1">Sistem Permohonan dan Pemantauan Projek ICT.</p></div>
@@ -55,7 +57,7 @@
 
                     @include('livewire.partials.jtict-status', ['meeting' => \App\Models\Meeting::currentJtict()])
                     <livewire:application-list />
-                @endhasrole
+                @endif
             @endhasrole
         </div>
     </div>

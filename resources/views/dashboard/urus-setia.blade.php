@@ -2,14 +2,8 @@
 @php
     $user = auth()->user();
 
-    // PP1: kad mengikut status PROSES (App\Enums\ApplicationStatus); draf tidak dikira kerana ia milik pemohon.
-    // Keputusan mesyuarat (Lulus / Tidak Lulus / Kaji Semula) bukan status proses dan tidak dipaparkan di sini.
-    $statusCards = array_values(array_filter(
-        \App\Enums\ApplicationStatus::cases(),
-        fn ($status) => $status !== \App\Enums\ApplicationStatus::Draft,
-    ));
     $statusCounts = \App\Models\Application::query()
-        ->whereIn('status', array_map(fn ($status) => $status->value, $statusCards))
+        ->whereIn('status', [\App\Enums\ApplicationStatus::Submitted->value, \App\Enums\ApplicationStatus::InJtict->value])
         ->selectRaw('status, count(*) as total')
         ->groupBy('status')
         ->pluck('total', 'status');
@@ -27,8 +21,34 @@
 
     $needsOfficer = \App\Models\Application::needsOfficerReassignment()->with('agency')->latest()->get();
 
-    $pendingUsers = \App\Models\User::pending()->with('agency:id,name')->oldest()->limit(5)->get();
+    // PP4.2: permohonan Lengkap menunggu keputusan Pra JTICT (application_decisions sebagai sumber).
+    $preJtictPending = $user->can('viewPreJtictQueue', \App\Models\Application::class)
+        ? \App\Models\Application::awaitingPreJtictDecision()->count()
+        : null;
+
     $pendingCount = \App\Models\User::pending()->count();
+
+    // Kad hanya untuk kerja yang menunggu tindakan Urus Setia; status yang menunggu pemohon
+    // (Tidak Lengkap, Pindaan Pra JTICT) atau telah Selesai tidak dipaparkan. Setiap kad boleh diklik.
+    $listUrl = fn (\App\Enums\ApplicationStatus $status) => route('dashboard', ['status' => $status->value]) . '#senarai-permohonan';
+    $actionCards = array_values(array_filter([
+        ['title' => 'Semakan Permohonan', 'count' => $statusCounts[\App\Enums\ApplicationStatus::Submitted->value] ?? 0, 'unit' => 'permohonan',
+            'desc' => 'Dihantar oleh agensi, menunggu semakan kelengkapan.', 'cta' => 'Semak permohonan',
+            'href' => $listUrl(\App\Enums\ApplicationStatus::Submitted), 'tone' => 'bg-blue-100 text-blue-800', 'ink' => 'text-blue-800', 'ring' => 'hover:border-blue-700',
+            'icon' => 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2ZM9 14l2 2 4-4'],
+        $preJtictPending === null ? null : ['title' => 'Keputusan Pra JTICT', 'count' => $preJtictPending, 'unit' => 'permohonan',
+            'desc' => 'Lengkap, menunggu keputusan Pra JTICT direkodkan.', 'cta' => 'Rekod keputusan',
+            'href' => route('pre-jtict.index'), 'tone' => 'bg-cyan-100 text-cyan-800', 'ink' => 'text-cyan-800', 'ring' => 'hover:border-cyan-700',
+            'icon' => 'M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0ZM19 7l-3 7a4 4 0 0 0 6 0Z'],
+        ['title' => 'Keputusan JTICT', 'count' => $statusCounts[\App\Enums\ApplicationStatus::InJtict->value] ?? 0, 'unit' => 'permohonan',
+            'desc' => 'Dalam Proses JTICT, menunggu keputusan mesyuarat.', 'cta' => 'Rekod keputusan',
+            'href' => route('jtict.index'), 'tone' => 'bg-indigo-100 text-indigo-800', 'ink' => 'text-indigo-800', 'ring' => 'hover:border-indigo-700',
+            'icon' => 'M3 21h18M5 21V10M19 21V10M9 21V10M15 21V10M2 10l10-6 10 6Z'],
+        ['title' => 'Pendaftaran Pengguna', 'count' => $pendingCount, 'unit' => 'menunggu',
+            'desc' => 'Pendaftaran sendiri menunggu kelulusan Urus Setia.', 'cta' => 'Semak pendaftaran',
+            'href' => route('users.requests'), 'tone' => 'bg-amber-100 text-amber-800', 'ink' => 'text-amber-800', 'ring' => 'hover:border-amber-700',
+            'icon' => 'M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6M12.5 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0'],
+    ]));
 @endphp
 
 <!-- Salam & tindakan utama -->
@@ -88,28 +108,52 @@
     </section>
 @endif
 
-<!-- Ringkasan ikut status -->
-<section aria-label="Ringkasan status permohonan" class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3.5">
-    @foreach ($statusCards as $status)
-        <div class="bg-white border border-slate-200 rounded-[14px] p-[18px] flex flex-col gap-2.5">
-            <span class="flex items-center justify-between gap-2">
-                <span class="text-[13px] font-bold text-slate-600">{{ $status->label() }}</span>
-                <x-application-status-badge :status="$status" variant="dot" />
-            </span>
-            <span class="text-[32px] leading-none font-black tracking-tight">{{ number_format($statusCounts[$status->value] ?? 0) }}</span>
-            <span class="text-xs text-slate-500">{{ $status->description() }}</span>
-        </div>
-    @endforeach
+<!-- Kad tindakan Urus Setia -->
+<section aria-labelledby="tajuk-tindakan" class="flex flex-col gap-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="tajuk-tindakan" class="text-lg font-extrabold">Perlu Tindakan Anda</h2>
+        <span class="text-[13px] text-slate-500">Klik kad untuk melihat senarai berkaitan.</span>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3.5">
+        @foreach ($actionCards as $card)
+            <a href="{{ $card['href'] }}" class="group bg-white border border-slate-200 rounded-[14px] p-[18px] flex flex-col gap-3 transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 {{ $card['ring'] }}">
+                <span class="flex items-center justify-between gap-2.5">
+                    <span class="inline-flex items-center gap-2.5">
+                        <span aria-hidden="true" class="w-[38px] h-[38px] rounded-[11px] flex items-center justify-center {{ $card['tone'] }}">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ $card['icon'] }}" /></svg>
+                        </span>
+                        <span class="text-sm font-extrabold text-slate-900">{{ $card['title'] }}</span>
+                    </span>
+                    <span @class(['text-[11px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap', $card['tone'] => $card['count'] > 0, 'bg-slate-100 text-slate-500' => $card['count'] === 0])>{{ $card['count'] > 0 ? 'Perlu tindakan' : 'Tiada' }}</span>
+                </span>
+                <span class="flex items-baseline gap-2">
+                    <span @class(['text-4xl leading-none font-black tracking-tight', 'text-slate-900' => $card['count'] > 0, 'text-slate-400' => $card['count'] === 0])>{{ number_format($card['count']) }}</span>
+                    <span class="text-[13px] font-semibold text-slate-500">{{ $card['unit'] }}</span>
+                </span>
+                <span class="text-[13px] leading-snug text-slate-600">{{ $card['desc'] }}</span>
+                <span class="mt-auto pt-2.5 border-t border-slate-100 flex items-center justify-between text-[13px] font-extrabold {{ $card['ink'] }}">
+                    {{ $card['cta'] }}
+                    <svg aria-hidden="true" class="w-4 h-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </span>
+            </a>
+        @endforeach
+    </div>
 </section>
 
 <!-- Kandungan utama -->
 <div class="flex flex-wrap gap-6 items-start">
 
-    <!-- Permohonan untuk semakan -->
-    <section class="flex-[999_1_640px] min-w-0 flex flex-col gap-3">
+    <!-- Senarai permohonan (status ikut ?status= daripada kad / menu; lalai Dihantar) -->
+    @php($listStatus = \App\Enums\ApplicationStatus::tryFrom((string) request()->query('status')) ?? \App\Enums\ApplicationStatus::Submitted)
+    <section id="senarai-permohonan" class="scroll-mt-6 flex-[999_1_640px] min-w-0 flex flex-col gap-3">
         <div class="flex flex-col gap-0.5">
-            <h2 class="text-lg font-extrabold">Permohonan untuk Semakan</h2>
-            <span class="text-[13px] text-slate-500">Permohonan projek yang telah dihantar untuk semakan Urus Setia.</span>
+            @if ($listStatus === \App\Enums\ApplicationStatus::Submitted)
+                <h2 class="text-lg font-extrabold">Permohonan untuk Semakan</h2>
+                <span class="text-[13px] text-slate-500">Permohonan projek yang telah dihantar untuk semakan Urus Setia.</span>
+            @else
+                <h2 class="text-lg font-extrabold">Permohonan {{ $listStatus->label() }}</h2>
+                <span class="text-[13px] text-slate-500">{{ $listStatus->description() }}.</span>
+            @endif
         </div>
         <livewire:application-list />
     </section>
@@ -142,49 +186,30 @@
             @endforelse
         </section>
 
-        <section class="bg-white border border-slate-200 rounded-[14px] px-5 py-[18px] flex flex-col gap-3.5">
-            <h2 class="text-base font-extrabold">Perlu Tindakan</h2>
-
-            @if ($needsOfficer->isNotEmpty())
-                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex flex-col gap-2.5">
-                    <div class="flex justify-between items-center gap-2">
-                        <strong class="text-sm text-amber-800">Tanpa Pegawai Utama aktif</strong>
-                        <span class="min-w-6 h-6 px-2 rounded-full bg-amber-800 text-white text-xs font-extrabold inline-flex items-center justify-center">{{ $needsOfficer->count() }}</span>
-                    </div>
-                    <p class="text-xs text-amber-900">Pegawai Utama telah bertukar keluar agensi, akaunnya dipadam, atau belum dilantik.</p>
-                    <ul class="flex flex-col gap-2">
-                        @foreach ($needsOfficer as $app)
-                            <li class="flex justify-between items-center gap-2.5 text-[13px]">
-                                <span class="flex flex-col gap-px min-w-0">
-                                    <strong>{{ $app->reference_number }}</strong>
-                                    <span class="text-amber-900 truncate" title="{{ $app->title }}">{{ $app->title }}@if ($app->agency) · {{ $app->agency->code }}@endif</span>
-                                </span>
-                                <a href="{{ route('application.view', $app->uuid) }}" class="flex-none text-[13px] font-bold text-amber-800 hover:underline">Tambah Pegawai</a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-
-            <div class="border border-slate-200 rounded-xl p-3.5 flex flex-col gap-2.5">
+        {{-- Pra JTICT & pendaftaran pengguna kini kad tindakan di atas; hanya amaran Pegawai Utama kekal di sini. --}}
+        @if ($needsOfficer->isNotEmpty())
+            <section aria-label="Tanpa Pegawai Utama aktif" class="bg-amber-50 border border-amber-200 rounded-[14px] px-[18px] py-4 flex flex-col gap-2.5">
                 <div class="flex justify-between items-center gap-2">
-                    <strong class="text-sm">Permohonan pendaftaran pengguna</strong>
-                    <span class="min-w-6 h-6 px-2 rounded-full bg-blue-700 text-white text-xs font-extrabold inline-flex items-center justify-center">{{ $pendingCount }}</span>
+                    <strong class="text-sm text-amber-800">Tanpa Pegawai Utama aktif</strong>
+                    <span class="min-w-6 h-6 px-2 rounded-full bg-amber-800 text-white text-xs font-extrabold inline-flex items-center justify-center">{{ $needsOfficer->count() }}</span>
                 </div>
-                @forelse ($pendingUsers as $pending)
-                    <div class="flex flex-col gap-px text-[13px]">
-                        <strong>{{ $pending->name }}</strong>
-                        <span class="text-slate-500">{{ collect([$pending->agency?->name, $pending->created_at?->format('d/m/Y')])->filter()->implode(' · ') }}</span>
-                    </div>
-                @empty
-                    <p class="text-[13px] font-semibold text-green-800">Semua permohonan pendaftaran telah disemak.</p>
-                @endforelse
-                <a href="{{ route('users.requests') }}" class="text-[13px] font-bold text-green-900 hover:underline">Semak permohonan pendaftaran →</a>
-            </div>
-        </section>
+                <p class="text-xs text-amber-900">Pegawai Utama telah bertukar keluar agensi, akaunnya dipadam, atau belum dilantik.</p>
+                <ul class="flex flex-col gap-2">
+                    @foreach ($needsOfficer as $app)
+                        <li class="flex justify-between items-center gap-2.5 text-[13px]">
+                            <span class="flex flex-col gap-px min-w-0">
+                                <strong>{{ $app->reference_number }}</strong>
+                                <span class="text-amber-900 truncate" title="{{ $app->title }}">{{ $app->title }}@if ($app->agency) · {{ $app->agency->code }}@endif</span>
+                            </span>
+                            <a href="{{ route('application.view', $app->uuid) }}" class="flex-none text-[13px] font-bold text-amber-800 hover:underline">Tambah Pegawai</a>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
 
         <section class="bg-white border border-slate-200 rounded-[14px] px-5 py-[18px] flex flex-col gap-3">
-            <h2 class="text-base font-extrabold">Pintasan</h2>
+            <h2 class="text-base font-extrabold">Pautan Pantas</h2>
             <div class="grid grid-cols-2 gap-2.5">
                 @foreach ([
                     ['label' => 'Agensi', 'href' => route('admin.agencies'), 'icon' => 'M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6'],

@@ -330,7 +330,7 @@ class UserModuleIntegrationTest extends TestCase
         $user = $this->actor('pengguna_biasa');
 
         $this->actingAs($user)->get('/profile')
-            ->assertSee('Maklumat Profil')->assertSee('Tukar Kata Laluan')->assertSee('Simpan')
+            ->assertSee('Maklumat Hubungan')->assertSee('Tukar Kata Laluan')->assertSee('Kemaskini')
             ->assertDontSee('Profile Information')->assertDontSee('Update Password');
 
         Auth::logout();

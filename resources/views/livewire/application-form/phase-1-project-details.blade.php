@@ -1,27 +1,19 @@
-<div class="space-y-6" wire:key="phase-1-form">
-    <div class="border-b pb-2">
-        <h3 class="text-lg font-semibold text-gray-700">Maklumat Am</h3>
-        <p class="text-xs text-gray-500">Sila nyatakan maklumat asas permohonan projek ICT agensi anda.</p>
+<div class="space-y-5" wire:key="phase-1-form">
+    <x-form.input size="lg" :focus-within="$theme['inputWithin']" label="Nama Projek" wire:model="form.title" :error="$errors->first('form.title')" required placeholder="Contoh: Naik Taraf Infrastruktur Rangkaian Agensi" />
+
+    <div class="max-w-md">
+        <x-form.select size="lg" :focus="$theme['input']" label="Kategori Permohonan" wire:model="form.application_category" :error="$errors->first('form.application_category')" required>
+            <option value="" disabled>Pilih kategori permohonan</option>
+            @foreach ($this->applicationCategoryOptions as $option)
+                <option value="{{ $option->code }}">{{ $option->name . (! $option->is_active || $option->trashed() ? ' (Tidak Aktif)' : '') }}</option>
+            @endforeach
+        </x-form.select>
     </div>
 
-    <x-form.input label="Nama Projek" wire:model="form.title" :error="$errors->first('form.title')" required placeholder="Contoh: Naik Taraf Infrastruktur Rangkaian Agensi" />
+    {{-- Teks berformat (Trix); HTML dibersihkan di pelayan (App\Support\RichText) sebelum disimpan. --}}
+    <x-form.rich-text size="lg" :focus="$theme['input']" label="Objektif Projek" wire:model="form.objectives" :error="$errors->first('form.objectives')" required
+        hint="Senaraikan objektif utama yang ingin dicapai." />
 
-    <x-form.select label="Kategori Permohonan" wire:model="form.application_category" :error="$errors->first('form.application_category')" required>
-        <option value="" disabled>Pilih kategori permohonan</option>
-        @foreach ($this->applicationCategoryOptions as $option)
-            <option value="{{ $option->code }}">{{ $option->name . (! $option->is_active || $option->trashed() ? ' (Tidak Aktif)' : '') }}</option>
-        @endforeach
-    </x-form.select>
-
-    <div>
-        <label class="block text-xs font-medium text-gray-700">Objektif Projek *</label>
-        <textarea wire:model="form.objectives" rows="3" class="mt-1 block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Senaraikan objektif utama yang ingin dicapai..."></textarea>
-        @error('form.objectives') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span> @enderror
-    </div>
-
-    <div>
-        <label class="block text-xs font-medium text-gray-700">Skop Projek *</label>
-        <textarea wire:model="form.project_scope" rows="3" class="mt-1 block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Nyatakan skop kerja dan batasan pelaksanaan..."></textarea>
-        @error('form.project_scope') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span> @enderror
-    </div>
+    <x-form.rich-text size="lg" :focus="$theme['input']" label="Skop Projek" wire:model="form.project_scope" :error="$errors->first('form.project_scope')" required
+        hint="Nyatakan skop kerja dan batasan pelaksanaan." />
 </div>

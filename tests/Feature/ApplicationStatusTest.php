@@ -154,8 +154,10 @@ class ApplicationStatusTest extends TestCase
         $this->makeApplication('NEEDS_AMENDMENT', 'Projek Pindaan');
         $this->makeApplication('SUBMITTED', 'Projek Dihantar');
 
+        // Pemohon menapis melalui butang kumpulan (Semua / Perlu tindakan / Dalam proses / Selesai);
+        // penapis status dalaman masih menggunakan nilai enum.
         $component = Livewire::actingAs($this->applicant)->test(ApplicationList::class)
-            ->assertSeeHtml('<option value="NEEDS_AMENDMENT">Tidak Lengkap</option>')
+            ->assertSeeInOrder(['Semua', 'Perlu tindakan', 'Dalam proses', 'Selesai'])
             ->assertDontSeeHtml('<option value="APPROVED">')
             ->assertSee('Perlu pindaan &amp; hantar semula', false);
 

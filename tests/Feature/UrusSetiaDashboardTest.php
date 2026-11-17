@@ -7,13 +7,14 @@ use App\Models\Agency;
 use App\Models\Application;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Tests\Concerns\OpensJtictMeeting;
 use Tests\TestCase;
 
 /**
- * Papan Pemuka Urus Setia: status JTICT, ringkasan status permohonan, mesyuarat akan datang
- * dan senarai Perlu Tindakan dipaparkan daripada data sebenar.
+ * Papan Pemuka Urus Setia: status JTICT, kad Perlu Tindakan (boleh diklik), senarai ikut ?status=,
+ * mesyuarat akan datang & bar menu satu baris dipaparkan daripada data sebenar.
  */
 class UrusSetiaDashboardTest extends TestCase
 {
@@ -59,12 +60,17 @@ class UrusSetiaDashboardTest extends TestCase
             ->assertSee('Bilik Mesyuarat Ujian');
     }
 
-    public function test_status_cards_count_applications_by_status_excluding_drafts(): void
+    private function cardValue(string $html, string $title): ?string
+    {
+        return preg_match('/>' . preg_quote($title, '/') . '<\/span>.*?text-4xl[^>]*>([\d,]+)<\/span>/s', $html, $m) ? $m[1] : null;
+    }
+
+    public function test_action_cards_count_only_work_awaiting_urus_setia_and_link_to_lists(): void
     {
         $applicant = User::factory()->create(['agency_id' => $this->agency->id]);
 
-        // PP1: kad mengikut status proses; 'APPROVED' (Lulus) ialah keputusan mesyuarat, bukan status proses.
-        foreach (['SUBMITTED', 'SUBMITTED', 'COMPLETE', 'DRAFT'] as $i => $status) {
+        // Tidak Lengkap, Pindaan Pra JTICT, Selesai & Draf menunggu pemohon / telah selesai: tiada kad.
+        foreach (['SUBMITTED', 'SUBMITTED', 'IN_JTICT', 'NEEDS_AMENDMENT', 'PRE_JTICT_AMENDMENT', 'CLOSED', 'DRAFT'] as $i => $status) {
             Application::create([
                 'reference_number' => 'SPPICT/2026/' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
                 'agency_id' => $this->agency->id,
@@ -74,26 +80,60 @@ class UrusSetiaDashboardTest extends TestCase
                 'status' => $status,
             ]);
         }
-
-        $response = $this->actingAs($this->urusSetia)->get('/dashboard')->assertOk();
-
-        $html = $response->getContent();
-        $this->assertMatchesRegularExpression('/>Dihantar<\/span>.*?>2<\/span>/s', $html);
-        $this->assertMatchesRegularExpression('/>Lengkap<\/span>.*?>1<\/span>/s', $html);
-        $this->assertMatchesRegularExpression('/>Tidak Lengkap<\/span>.*?>0<\/span>/s', $html);
-        $this->assertDoesNotMatchRegularExpression('/>Lulus<\/span>/', $html);
-    }
-
-    public function test_pending_registrations_are_listed_with_link_to_review_page(): void
-    {
         User::factory()->create(['name' => 'Pemohon Menunggu', 'agency_id' => $this->agency->id, 'status' => UserStatus::Pending]);
         User::factory()->create(['name' => 'Pemohon Ditolak', 'agency_id' => $this->agency->id, 'status' => UserStatus::Rejected]);
 
+        $html = $this->actingAs($this->urusSetia)->get('/dashboard')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Perlu Tindakan Anda', $html);
+        $this->assertSame('2', $this->cardValue($html, 'Semakan Permohonan'));
+        $this->assertSame('0', $this->cardValue($html, 'Keputusan Pra JTICT'));
+        $this->assertSame('1', $this->cardValue($html, 'Keputusan JTICT'));
+        $this->assertSame('1', $this->cardValue($html, 'Pendaftaran Pengguna'));
+        $this->assertStringNotContainsString('>Tidak Lengkap</span>', $html);
+        $this->assertStringNotContainsString('>Selesai</span>', $html);
+
+        foreach ([
+            route('dashboard', ['status' => 'SUBMITTED']) . '#senarai-permohonan',
+            route('pre-jtict.index'),
+            route('jtict.index'), // PP4.3A: kad Keputusan JTICT ke senarai keputusan JTICT
+
+            route('users.requests'),
+        ] as $href) {
+            $this->assertStringContainsString('href="' . e($href) . '"', $html);
+        }
+    }
+
+    public function test_status_query_filters_the_review_list(): void
+    {
+        $applicant = User::factory()->create(['agency_id' => $this->agency->id]);
+        foreach (['SUBMITTED' => 'Projek Dihantar', 'IN_JTICT' => 'Projek Dalam JTICT'] as $status => $title) {
+            Application::create([
+                'reference_number' => 'SPPICT/2026/' . $status, 'agency_id' => $this->agency->id, 'applicant_id' => $applicant->id,
+                'title' => $title, 'estimated_cost' => 10000, 'status' => $status,
+            ]);
+        }
+
+        // Hanya jadual senarai disemak (amaran "Tanpa Pegawai Utama" di lajur sisi turut menyenaraikan tajuk).
+        $table = fn (string $query) => Str::between($this->actingAs($this->urusSetia)->get('/dashboard' . $query)->assertOk()->getContent(), '<tbody', '</tbody>');
+
+        $this->assertStringContainsString('Projek Dihantar', $table(''));
+        $this->assertStringNotContainsString('Projek Dalam JTICT', $table(''));
+
+        $this->assertStringContainsString('Projek Dalam JTICT', $table('?status=IN_JTICT'));
+        $this->assertStringNotContainsString('Projek Dihantar', $table('?status=IN_JTICT'));
+        $this->actingAs($this->urusSetia)->get('/dashboard?status=IN_JTICT')->assertSee('Permohonan Dalam Proses JTICT');
+
+        // Nilai tidak sah kembali kepada lalai Dihantar.
+        $this->assertStringContainsString('Projek Dihantar', $table('?status=BUKAN'));
+    }
+
+    public function test_menu_bar_groups_urus_setia_items_into_dropdowns(): void
+    {
         $this->actingAs($this->urusSetia)->get('/dashboard')
             ->assertOk()
-            ->assertSee('Pemohon Menunggu')
-            ->assertDontSee('Pemohon Ditolak')
-            ->assertSee(route('users.requests'));
+            ->assertSeeInOrder(['Papan Pemuka', 'Permohonan', 'Semakan Permohonan', 'Keputusan Pra JTICT', 'Keputusan JTICT', 'Mesyuarat', 'Pengguna', 'Tetapan', 'Pengurusan Agensi', 'Kategori Permohonan'])
+            ->assertSee('Pautan Pantas');
     }
 
     public function test_review_table_has_no_kemaskini_column_for_urus_setia_only(): void

@@ -37,6 +37,13 @@ return [
             'URI.AllowedSchemes'       => ['http' => true, 'https' => true, 'mailto' => true],
             'AutoFormat.RemoveEmpty'   => true,
         ],
+        // Objektif & Skop Projek (Trix) — sama seperti Agenda Mesyuarat.
+        'permohonan' => [
+            'HTML.Doctype'             => 'HTML 4.01 Transitional',
+            'HTML.Allowed'             => 'div,br,strong,b,em,i,del,a[href|title],h1,blockquote,pre,ul,ol,li',
+            'URI.AllowedSchemes'       => ['http' => true, 'https' => true, 'mailto' => true],
+            'AutoFormat.RemoveEmpty'   => true,
+        ],
         'test'    => [
             'Attr.EnableID' => 'true',
         ],

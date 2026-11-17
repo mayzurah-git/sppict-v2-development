@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OfficerRole;
 use App\Livewire\ApplicationForm;
 use App\Models\Agency;
 use App\Models\Application;
+use App\Models\ApplicationOfficer;
 use App\Models\ProjectCategory;
 use App\Models\ApplicationDocument;
 use App\Models\User;
@@ -222,7 +224,7 @@ class ApplicationDocumentTest extends TestCase
         static $sequence = 0;
         $sequence++;
 
-        return Application::create([
+        $application = Application::create([
             'reference_number' => sprintf('SPPICT/2026/T%04d', $sequence),
             'agency_id' => $applicant->agency_id,
             'applicant_id' => $applicant->id,
@@ -230,6 +232,17 @@ class ApplicationDocumentTest extends TestCase
             'estimated_cost' => 10000,
             'status' => $status,
         ]);
+
+        // Permohonan yang pernah dihantar sentiasa mempunyai Pegawai Utama aktif (rujuk syncOfficers);
+        // selepas dihantar, hanya pegawai aktif boleh meminda.
+        if ($status !== 'DRAFT') {
+            $application->officers()->create(ApplicationOfficer::snapshotFrom($applicant) + [
+                'role' => OfficerRole::Primary,
+                'started_at' => today()->subMonth(),
+            ]);
+        }
+
+        return $application;
     }
 
     private function storeDocument(Application $application): ApplicationDocument

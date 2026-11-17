@@ -1,16 +1,16 @@
 @if ($officer)
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs bg-white border border-gray-200 rounded-md p-3">
+    <dl class="grid grid-cols-1 sm:grid-cols-3 gap-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[13px]">
         <div>
-            <p class="text-[11px] text-gray-500">Jawatan & Gred</p>
-            <p class="font-semibold text-gray-800">{{ $officer->getAttribute('position') ?: ($officer->positionRelation?->title ?? '-') }}</p>
+            <dt class="text-xs text-slate-500">Jawatan &amp; Gred</dt>
+            <dd class="font-semibold text-slate-900">{{ $officer->getAttribute('position') ?: ($officer->positionRelation?->title ?? '-') }}</dd>
+        </div>
+        <div class="min-w-0">
+            <dt class="text-xs text-slate-500">E-mel Rasmi</dt>
+            <dd class="font-semibold text-slate-900 break-all">{{ $officer->email }}</dd>
         </div>
         <div>
-            <p class="text-[11px] text-gray-500">E-mel Rasmi</p>
-            <p class="font-semibold text-gray-800">{{ $officer->email }}</p>
+            <dt class="text-xs text-slate-500">No. Telefon</dt>
+            <dd class="font-semibold text-slate-900">{{ $officer->phone_number ?: '-' }}</dd>
         </div>
-        <div>
-            <p class="text-[11px] text-gray-500">No. Telefon</p>
-            <p class="font-semibold text-gray-800">{{ $officer->phone_number ?: '-' }}</p>
-        </div>
-    </div>
+    </dl>
 @endif

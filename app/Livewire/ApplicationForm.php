@@ -7,6 +7,7 @@ use App\Enums\ApplicationStatus;
 use App\Models\Agency;
 use App\Models\Application;
 use App\Models\ApplicationCategory;
+use App\Models\ApplicationDecision as ApplicationDecisionRecord;
 use App\Models\ApplicationReview;
 use App\Models\Meeting;
 use App\Models\ProcurementMethod;
@@ -75,8 +76,9 @@ class ApplicationForm extends Component
             // Isikan semula data ke Form Object
             $this->form->title = $application->title ?? '';
             $this->form->application_category = $application->application_category ?? '';
-            $this->form->objectives = $application->objectives ?? '';
-            $this->form->project_scope = $application->project_scope ?? '';
+            // Teks biasa lama ditukar kepada HTML untuk editor Trix.
+            $this->form->objectives = \App\Support\RichText::forEditor($application->objectives);
+            $this->form->project_scope = \App\Support\RichText::forEditor($application->project_scope);
 
             $this->form->procurement_type_id = $application->procurement_type_id ?? '';
             $this->form->procurement_method_id = $application->procurement_method_id ?? '';
@@ -297,6 +299,30 @@ class ApplicationForm extends Component
         }
     }
 
+    /**
+     * Penunjuk fasa: kembali ke mana-mana fasa terdahulu dengan bebas; ke hadapan hanya selepas
+     * setiap fasa di antaranya lulus pengesahan (berhenti pada fasa pertama yang gagal).
+     */
+    public function goToStep(int $step): void
+    {
+        $step = max(1, min(5, $step));
+
+        if ($step <= $this->currentStep) {
+            $this->currentStep = $step;
+
+            return;
+        }
+
+        $this->ensureAgencyConfirmed();
+
+        for ($s = $this->currentStep; $s < $step; $s++) {
+            $this->currentStep = $s;
+            $this->validateStep($s);
+        }
+
+        $this->currentStep = $step;
+    }
+
     public function validateCurrentStep()
     {
         $this->validateStep($this->currentStep);
@@ -505,6 +531,23 @@ class ApplicationForm extends Component
             ?? Application::whereKey($this->applicationId)->value('review_remarks');
     }
 
+    /**
+     * PP4.2: keputusan Pra JTICT "Ditolak dengan Pindaan" terkini (ulasan dipaparkan semasa pemohon meminda).
+     */
+    #[Computed]
+    public function preJtictAmendmentDecision(): ?ApplicationDecisionRecord
+    {
+        if (! $this->applicationId) {
+            return null;
+        }
+
+        $application = Application::find($this->applicationId);
+
+        return $application?->statusEnum() === ApplicationStatus::PreJtictAmendment
+            ? $application->latestPreJtictDecision
+            : null;
+    }
+
     public function updatedResubmissionMeetingId(): void
     {
         unset($this->targetMeeting);
@@ -606,7 +649,16 @@ class ApplicationForm extends Component
 
     public function render()
     {
-        return view('livewire.application-form');
-            
+        return view('livewire.application-form', [
+            'theme' => \App\Support\RoleTheme::for(Auth::user()),
+            'savedApplication' => $this->applicationId ? Application::find($this->applicationId, ['id', 'status', 'reference_number']) : null,
+            'steps' => [
+                1 => ['label' => 'Maklumat Am', 'title' => 'Maklumat Am', 'desc' => 'Sila nyatakan maklumat asas permohonan projek ICT agensi anda.'],
+                2 => ['label' => 'Perolehan', 'title' => 'Maklumat Peruntukan & Perolehan', 'desc' => 'Nyatakan anggaran kos, jenis perolehan dan tempoh pelaksanaan projek.'],
+                3 => ['label' => 'Perincian Projek', 'title' => 'Perincian Projek', 'desc' => 'Sila masukkan spesifikasi teknikal, kuantiti dan kos seunit bagi setiap perolehan.'],
+                4 => ['label' => 'Muat Naik Dokumen', 'title' => 'Muat Naik Dokumen Sokongan', 'desc' => 'Kertas Cadangan dalam format PDF atau Word (.docx), dan Slaid Pembentangan dalam format PDF sahaja (Maksimum 25MB setiap fail).'],
+                5 => ['label' => 'Pegawai Bertanggungjawab', 'title' => 'Pegawai Bertanggungjawab & Semakan Akhir', 'desc' => 'Sila sahkan maklumat pegawai untuk dihubungi sebelum membuat penyerahan rasmi.'],
+            ],
+        ]);
     }
 }

@@ -1,11 +1,6 @@
-<div class="space-y-6" wire:key="phase-4-form">
-    <div class="border-b pb-2">
-        <h3 class="text-lg font-semibold text-gray-700">Muat Naik Dokumen Sokongan</h3>
-        <p class="text-xs text-gray-500">Kertas Cadangan dalam format PDF atau Word (.docx), dan Slaid Pembentangan dalam format PDF sahaja (Maksimum 25MB setiap fail).</p>
-    </div>
-
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4" wire:key="phase-4-form">
     <x-form.file-upload
-        label="1. Kertas Cadangan Projek (Wajib)"
+        label="1. Kertas Cadangan Projek"
         wire:model="form.proposal_paper"
         :file="$form->proposal_paper"
         :existing="$this->existingDocuments->get('PROPOSAL_PAPER')"
@@ -14,6 +9,7 @@
         formats="PDF / DOCX"
         :error="$errors->first('form.proposal_paper')"
         target="form.proposal_paper"
+        :link-class="$theme['link']"
         required
     />
 
@@ -27,5 +23,6 @@
         formats="PDF"
         :error="$errors->first('form.presentation_slide')"
         target="form.presentation_slide"
+        :link-class="$theme['link']"
     />
 </div>

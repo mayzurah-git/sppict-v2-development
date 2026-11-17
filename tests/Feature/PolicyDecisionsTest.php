@@ -164,7 +164,8 @@ class PolicyDecisionsTest extends TestCase
 
     public function test_navigation_shows_create_link_only_for_permitted_roles(): void
     {
-        $this->actingAs($this->userWithRole('pentadbir_urus_setia'))->get('/dashboard')->assertSee('Permohonan Baru');
+        // Urus Setia: dalam menu Permohonan ▾ dan butang papan pemuka ("Permohonan Baharu").
+        $this->actingAs($this->userWithRole('pentadbir_urus_setia'))->get('/dashboard')->assertSee('Permohonan Baharu')->assertSee(url('/application/new'), false);
         $this->actingAs($this->userWithRole('pengguna_biasa'))->get('/dashboard')->assertSee('Permohonan Baru');
         $this->actingAs($this->userWithRole('pengurusan'))->get('/dashboard')->assertDontSee('Permohonan Baru');
     }

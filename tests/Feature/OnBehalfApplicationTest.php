@@ -352,8 +352,13 @@ class OnBehalfApplicationTest extends TestCase
         Notification::assertSentTo($this->urusSetia, ApplicationMarkedIncomplete::class);
         Notification::assertSentTo($this->targetOfficer, ApplicationMarkedIncomplete::class);
 
-        // Pendaftar membuat pindaan dan menghantar semula; agensi kekal
-        $component = Livewire::actingAs($this->urusSetia)->test(ApplicationForm::class, ['uuid' => $application->uuid])
+        // Selepas dihantar, Urus Setia pendaftar (bukan pegawai bertanggungjawab) hanya boleh melihat
+        // (keputusan pemilik sistem); pindaan dibuat oleh Pegawai Utama aktif agensi sasaran.
+        $this->assertFalse($this->urusSetia->can('update', $application));
+        $this->actingAs($this->urusSetia)->get(route('application.edit', $application->uuid))->assertForbidden();
+        $this->actingAs($this->urusSetia)->get(route('application.view', $application->uuid))->assertOk();
+
+        $component = Livewire::actingAs($this->targetOfficer)->test(ApplicationForm::class, ['uuid' => $application->uuid])
             ->assertSee(self::REMARKS)
             ->assertDontSee('Permohonan bagi Pihak Agensi');
         $this->fillValidForm($component, $this->targetOfficer);
@@ -362,8 +367,9 @@ class OnBehalfApplicationTest extends TestCase
         $application->refresh();
         $this->assertSame(ApplicationStatus::Submitted->value, $application->status);
         $this->assertSame($this->targetAgency->id, $application->agency_id);
+        $this->assertSame($this->urusSetia->id, $application->applicant_id, 'Pendaftar rekod kekal');
         $this->assertSame(
-            [['SUBMITTED', 'NEEDS_AMENDMENT', $this->urusSetia->id], ['NEEDS_AMENDMENT', 'SUBMITTED', $this->urusSetia->id]],
+            [['SUBMITTED', 'NEEDS_AMENDMENT', $this->urusSetia->id], ['NEEDS_AMENDMENT', 'SUBMITTED', $this->targetOfficer->id]],
             $application->reviews()->orderBy('id')->get()->map(fn ($r) => [$r->from_status, $r->to_status, $r->user_id])->all()
         );
         $this->assertSame($this->targetOfficer->id, $application->primaryOfficer->user_id);

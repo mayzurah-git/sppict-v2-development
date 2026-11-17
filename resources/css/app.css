@@ -13,6 +13,18 @@ trix-toolbar [data-trix-button-group="file-tools"] {
 .trix-content h1 { font-size: 1.125rem; font-weight: 700; }
 .trix-content a { color: #2563eb; text-decoration: underline; }
 
+/* Trix saiz besar (borang permohonan): bar alat bersambung dengan kotak editor */
+.rich-text-lg trix-toolbar {
+    padding: 6px 8px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-bottom: 0;
+    border-radius: 0.75rem 0.75rem 0 0;
+}
+.rich-text-lg trix-toolbar .trix-button-row { flex-wrap: wrap; gap: 4px; }
+.rich-text-lg trix-toolbar .trix-button-group { margin-bottom: 0; border-color: #e2e8f0; }
+.rich-text-lg trix-editor { padding: 0.75rem 1rem; }
+
 /* Flatpickr: ruang untuk penanda "pagi"/"petang" (format 12 jam) */
 .flatpickr-time .flatpickr-am-pm {
     width: 26%;

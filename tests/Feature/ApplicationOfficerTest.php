@@ -270,6 +270,97 @@ class ApplicationOfficerTest extends TestCase
             ->assertSee($application->reference_number);
     }
 
+    // --- PEGAWAI ASAL SELEPAS PERTUKARAN: PAPAR SAHAJA ---
+
+    public function test_original_officer_can_only_view_after_handover_and_stays_in_history(): void
+    {
+        $application = $this->submittedApplication();
+        $this->handover($application, $this->colleague);
+
+        foreach (['NEEDS_AMENDMENT', 'PRE_JTICT_AMENDMENT'] as $status) {
+            $application->forceFill(['status' => $status])->save();
+            $application->refresh();
+
+            // Pegawai asal (pemohon) masih dalam agensi: papar sahaja
+            $this->assertTrue($this->applicant->can('view', $application), $status);
+            $this->assertFalse($this->applicant->can('update', $application), $status);
+            $this->assertFalse($this->applicant->can('manageOfficers', $application), $status);
+            $this->actingAs($this->applicant)->get(route('application.edit', $application->uuid))->assertForbidden();
+            $this->actingAs($this->applicant)->get(route('application.view', $application->uuid))->assertOk();
+
+            // Pegawai Utama aktif yang baharu boleh meminda
+            $this->assertTrue($this->colleague->can('update', $application), $status);
+            $this->actingAs($this->colleague)->get(route('application.edit', $application->uuid))->assertOk();
+        }
+
+        // Pegawai asal kekal dalam kronologi sejarah pegawai bertanggungjawab
+        $this->actingAs($this->applicant)->get(route('application.view', $application->uuid))
+            ->assertSee('Sejarah Pegawai Bertanggungjawab')
+            ->assertSee($this->applicant->name)
+            ->assertSee(OfficerEndReason::TransferOut->label());
+
+        // Kemajuan projek: pegawai aktif sahaja
+        $application->forceFill(['status' => 'CLOSED'])->save();
+        $this->assertFalse($this->applicant->fresh()->can('updateProgress', $application->fresh()));
+        $this->assertTrue($this->colleague->fresh()->can('updateProgress', $application->fresh()));
+    }
+
+    public function test_registrar_can_edit_draft_without_being_an_officer(): void
+    {
+        $application = $this->submittedApplication();
+        $application->officers()->update(['user_id' => $this->colleague->id]);
+        $application->forceFill(['status' => 'DRAFT'])->save();
+
+        $this->assertTrue($this->applicant->can('update', $application->fresh()), 'Pendaftar boleh menyiapkan Draf sendiri');
+
+        $application->forceFill(['status' => 'NEEDS_AMENDMENT'])->save();
+        $this->assertFalse($this->applicant->can('update', $application->fresh()), 'Selepas dihantar: pegawai aktif sahaja');
+    }
+
+    public function test_officer_change_through_form_during_amendment_keeps_original_officer_in_history(): void
+    {
+        $application = $this->submittedApplication();
+        $application->forceFill(['status' => 'NEEDS_AMENDMENT'])->save();
+        $third = User::factory()->create(['agency_id' => $this->agency->id, 'position' => 'Pegawai Teknologi Maklumat F41']);
+
+        Livewire::actingAs($this->applicant)->test(ApplicationForm::class, ['uuid' => $application->uuid])
+            ->set('form.primary_officer_id', $third->id)
+            ->call('saveDraft')
+            ->assertHasNoErrors();
+
+        $application->refresh();
+        $this->assertSame($third->id, $application->primaryOfficer->user_id);
+
+        // Rekod pegawai asal ditutup (bukan ditulis ganti / dipadam)
+        $old = $application->officers()->where('user_id', $this->applicant->id)->sole();
+        $this->assertNotNull($old->ended_at);
+        $this->assertSame(OfficerEndReason::Reassignment, $old->end_reason);
+        $this->assertSame($this->applicant->id, $old->ended_by);
+        $this->assertSame(2, $application->officers()->count());
+
+        // Pegawai asal kini papar sahaja
+        $this->assertFalse($this->applicant->fresh()->can('update', $application));
+        $this->assertTrue($third->can('update', $application));
+    }
+
+    public function test_urus_setia_can_reassign_officer_while_application_awaits_amendment(): void
+    {
+        $application = $this->submittedApplication();
+        $application->forceFill(['status' => 'NEEDS_AMENDMENT'])->save();
+
+        // Pegawai Utama bertukar keluar: tiada siapa boleh meminda, permohonan dikesan perlu pegawai baharu
+        $this->applicant->update(['agency_id' => $this->makeAgency('JPN')->id]);
+        $this->assertFalse($this->applicant->fresh()->can('update', $application->fresh()));
+        $this->assertTrue(Application::needsOfficerReassignment()->whereKey($application->id)->exists());
+        $this->assertTrue($this->urusSetia->can('manageOfficers', $application));
+
+        $this->handover($application, $this->colleague);
+
+        $this->assertTrue($this->colleague->can('update', $application->fresh()));
+        $this->assertFalse(Application::needsOfficerReassignment()->exists());
+        $this->assertSame('NEEDS_AMENDMENT', $application->fresh()->status, 'Status tidak berubah');
+    }
+
     // --- PENGESANAN PEGAWAI BERTUKAR ---
 
     public function test_application_flagged_when_primary_officer_leaves_agency(): void

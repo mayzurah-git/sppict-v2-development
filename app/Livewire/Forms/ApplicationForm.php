@@ -3,6 +3,7 @@
 namespace App\Livewire\Forms;
 
 use App\Rules\DocumentSignature;
+use App\Support\RichText;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
 use Livewire\Form;
@@ -56,13 +57,23 @@ class ApplicationForm extends Form
             ->when($keep, fn ($current) => $current->orWhereIn($column, $keep)));
     }
 
+    private function minPlainText(int $min, string $message): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($min, $message): void {
+            if (mb_strlen(RichText::plain((string) $value)) < $min) {
+                $fail($message);
+            }
+        };
+    }
+
     public function validateStep1(?string $currentApplicationCategory = null)
     {
         $this->validate([
             'title' => 'required|string|max:255',
             'application_category' => ['required', 'string', $this->masterRule('application_categories', 'code', [$currentApplicationCategory])],
-            'objectives' => 'required|string|min:10',
-            'project_scope' => 'required|string|min:10',
+            // Teks berformat (Trix): panjang minimum dikira pada teks sahaja, bukan tag HTML.
+            'objectives' => ['required', 'string', $this->minPlainText(10, 'Objektif projek hendaklah sekurang-kurangnya 10 aksara.')],
+            'project_scope' => ['required', 'string', $this->minPlainText(10, 'Skop projek hendaklah sekurang-kurangnya 10 aksara.')],
         ], [
             'title.required' => 'Nama projek wajib diisi.',
             'application_category.required' => 'Kategori permohonan wajib dipilih.',

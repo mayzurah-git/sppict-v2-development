@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ApplicationStatus;
 use App\Enums\OfficerEndReason;
 use App\Enums\OfficerRole;
 use App\Models\Application;
@@ -79,8 +80,8 @@ class OfficerHandoverService
     {
         $errors = [];
 
-        if ($application->isEditable()) {
-            $errors['newOfficerId'] = 'Permohonan masih boleh disunting; kemas kini pegawai melalui borang permohonan.';
+        if ($application->statusEnum() === ApplicationStatus::Draft) {
+            $errors['newOfficerId'] = 'Permohonan masih Draf; kemas kini pegawai melalui borang permohonan.';
         } elseif (! $newOfficer && $role === OfficerRole::Primary) {
             $errors['newOfficerId'] = 'Sila pilih Pegawai Utama baharu.';
         } elseif (! $newOfficer && ! $current) {

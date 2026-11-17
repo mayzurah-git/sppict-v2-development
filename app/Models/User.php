@@ -179,7 +179,7 @@ class User extends Authenticatable implements Auditable
     public function activeOfficerReferences(): \Illuminate\Support\Collection
     {
         return $this->officerAssignments()->active()
-            ->whereHas('application', fn ($query) => $query->whereNotIn('status', Application::EDITABLE_STATUSES))
+            ->whereHas('application', fn ($query) => $query->where('status', '!=', \App\Enums\ApplicationStatus::Draft->value))
             ->with('application:id,reference_number')
             ->get()
             ->pluck('application.reference_number');
