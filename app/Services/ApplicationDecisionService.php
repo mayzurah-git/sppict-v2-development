@@ -9,11 +9,14 @@ use App\Models\Application;
 use App\Models\ApplicationDecision;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Notifications\ApplicationDecisionRecorded;
 use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -21,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  * PP4: rekod keputusan Pra JTICT dan Mesyuarat JTICT oleh Urus Setia.
  *
  * Dipanggil oleh ViewApplication (PP4.2: Pra JTICT; PP4.3A: JTICT).
- * Tiada e-mel dihantar, tiada rekod projek dicipta, dan lajur warisan jtict_decision tidak disentuh.
+ * PP4.3D: e-mel keputusan dihantar selepas transaksi berjaya (lihat notifyDecision()).
+ * Tiada rekod projek dicipta, dan lajur warisan jtict_decision tidak disentuh.
  */
 class ApplicationDecisionService
 {
@@ -124,7 +128,103 @@ class ApplicationDecisionService
 
         Log::info("Keputusan {$stage->label()} direkodkan: {$application->reference_number} {$decision->value} oleh ID Pengguna {$user->id}");
 
+        // PP4.3D: hanya selepas transaksi berjaya; kegagalan e-mel tidak menjejaskan keputusan yang telah disimpan.
+        $this->notifyDecision($application, $record);
+
         return $record;
+    }
+
+    /**
+     * PP4.3D: makluman e-mel keputusan kepada Pendaftar Permohonan dan Pegawai Utama aktif.
+     * Dipanggil sekali bagi setiap rekod keputusan baharu (rekod tidak boleh diubah; keputusan kedua
+     * bagi peringkat yang sama ditolak di dalam transaksi). Semua ralat dilog dan tidak dilontar semula.
+     */
+    private function notifyDecision(Application $application, ApplicationDecision $record): void
+    {
+        $label = "{$record->decision->label()} ({$application->reference_number})";
+
+        try {
+            $recipients = $this->decisionRecipients($application);
+        } catch (\Throwable $e) {
+            Log::error("Notifikasi keputusan {$label}: penerima tidak dapat ditentukan: " . ApplicationDecisionRecorded::safeError($e));
+
+            return;
+        }
+
+        if ($recipients->isEmpty()) {
+            Log::warning("Notifikasi keputusan {$label} tidak dihantar: tiada penerima dengan alamat e-mel sah.");
+
+            return;
+        }
+
+        $notification = new ApplicationDecisionRecorded($record);
+
+        foreach ($recipients as $role => $notifiable) {
+            try {
+                Notification::send($notifiable, $notification);
+                Log::info("Notifikasi keputusan {$label} diserahkan untuk penghantaran kepada {$role}.");
+            } catch (\Throwable $e) {
+                Log::error("Notifikasi keputusan {$label} gagal diserahkan kepada {$role}: " . ApplicationDecisionRecorded::safeError($e));
+            }
+        }
+    }
+
+    /**
+     * PP4.3D: penerima keputusan (keputusan pemilik sistem):
+     *  - Pendaftar Permohonan (akaun pengguna `applicant_id`; akaun dipadam = tiada penerima);
+     *  - Pegawai Utama aktif: lantikan belum tamat dan, jika dipautkan kepada akaun, akaun berstatus aktif
+     *    dan masih dalam agensi permohonan. Pegawai tanpa akaun (snapshot) menggunakan e-mel snapshot.
+     * Pegawai Kedua dan Urus Setia perekod tidak ditambah. Alamat tiada / tidak sah dilangkau dan dilog;
+     * alamat yang sama hanya menerima satu e-mel.
+     *
+     * @return Collection<string, object>
+     */
+    public function decisionRecipients(Application $application): Collection
+    {
+        $application->loadMissing(['applicant', 'primaryOfficer.user']);
+        $reference = $application->reference_number;
+        $candidates = [];
+
+        if ($application->applicant) {
+            $candidates['Pendaftar Permohonan'] = [$application->applicant, $application->applicant->email];
+        } else {
+            Log::warning("Notifikasi keputusan ({$reference}): akaun Pendaftar Permohonan tiada atau telah dipadam.");
+        }
+
+        $officer = $application->primaryOfficer;
+
+        if (! $officer) {
+            Log::warning("Notifikasi keputusan ({$reference}): tiada Pegawai Utama aktif.");
+        } elseif ($officer->user_id === null) {
+            $candidates['Pegawai Utama'] = [null, $officer->email];
+        } elseif (! $officer->user || ! $officer->user->isActive() || (int) $officer->user->agency_id !== (int) $application->agency_id) {
+            Log::warning("Notifikasi keputusan ({$reference}) tidak dihantar kepada Pegawai Utama: akaun tidak aktif, telah dipadam atau tidak lagi dalam agensi permohonan.");
+        } else {
+            $candidates['Pegawai Utama'] = [$officer->user, $officer->user->email];
+        }
+
+        $recipients = collect();
+        $seen = [];
+
+        foreach ($candidates as $role => [$user, $email]) {
+            $email = trim((string) $email);
+
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Log::warning("Notifikasi keputusan ({$reference}) tidak dihantar kepada {$role}: alamat e-mel tiada atau tidak sah.");
+
+                continue;
+            }
+
+            $key = strtolower($email);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $recipients->put($role, $user ?? Notification::route('mail', $email));
+        }
+
+        return $recipients;
     }
 
     /**

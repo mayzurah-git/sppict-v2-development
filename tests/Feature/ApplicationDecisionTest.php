@@ -17,6 +17,7 @@ use App\Models\ProcurementMethod;
 use App\Models\ProcurementType;
 use App\Models\ProjectCategory;
 use App\Models\User;
+use App\Notifications\ApplicationDecisionRecorded;
 use App\Services\ApplicationDecisionService;
 use App\Services\ApplicationReviewService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -601,7 +602,12 @@ class ApplicationDecisionTest extends TestCase
         $this->assertSame(0, Application::whereNotNull('copied_from_application_id')->count());
         $this->assertSame(0, DB::table('projects')->count(), 'Tiada rekod projek dicipta');
 
-        Notification::assertNothingSent();
+        // PP4.3D: dua keputusan (Pra JTICT + JTICT) memaklumkan Pendaftar & Pegawai Utama melalui
+        // ApplicationDecisionRecorded sahaja; tiada notifikasi atau e-mel lain (asal: assertNothingSent).
+        $expected = 2 * app(ApplicationDecisionService::class)->decisionRecipients($application)->count();
+        $this->assertGreaterThan(0, $expected);
+        Notification::assertSentTimes(ApplicationDecisionRecorded::class, $expected);
+        Notification::assertCount($expected);
         Mail::assertNothingSent();
     }
 
@@ -624,7 +630,8 @@ class ApplicationDecisionTest extends TestCase
             $source = file_get_contents($file);
 
             if (str_contains($source, 'DecisionStage::Jtict') || str_contains($source, 'decideJtict')
-                || str_contains($source, 'use App\Services\ApplicationDecisionService;')) {
+                || str_contains($source, 'use App\Notifications\ApplicationDecisionRecorded;
+use App\Services\ApplicationDecisionService;')) {
                 $this->assertSame('ViewApplication.php', basename($file), $file);
             }
         }

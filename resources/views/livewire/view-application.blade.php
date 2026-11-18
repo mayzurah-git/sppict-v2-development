@@ -92,6 +92,39 @@
         </div>
     @endcan
 
+    {{-- PP4.3C: Salin Permohonan (keputusan JTICT Kaji Semula; O7 / O8 / O10). Kebenaran sebenar disemak di service. --}}
+    @if ($this->isReviewOutcome)
+        <div class="p-4 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+                <p class="font-bold">Keputusan JTICT: Kaji Semula</p>
+                @if ($copy = $this->applicationCopy)
+                    @php($copyVisible = ! $copy->trashed() && auth()->user()->can('view', $copy))
+                    <p class="mt-0.5">Permohonan ini telah mempunyai salinan @if ($copyVisible)(<a href="{{ route('application.view', $copy->uuid) }}" class="font-bold underline">{{ $copy->reference_number }}</a>)@endif. Satu permohonan hanya boleh disalin sekali.</p>
+                @elseif (auth()->user()->can('copy', $application))
+                    <p class="mt-0.5">Permohonan ini boleh disalin sebagai Draf baharu (Fasa 1 hingga 3) untuk dikaji semula dan dihantar semula. Dokumen perlu dimuat naik semula. Permohonan asal dan keputusannya tidak berubah.</p>
+                @else
+                    <p class="mt-0.5">Anda tidak mempunyai kebenaran membuat salinan permohonan ini.</p>
+                @endif
+            </div>
+            @if (! $this->applicationCopy && auth()->user()->can('copy', $application))
+                <button type="button" wire:click="copyApplication" wire:confirm="Salin permohonan ini sebagai Draf baharu? Satu permohonan hanya boleh disalin sekali." wire:loading.attr="disabled" wire:target="copyApplication"
+                    class="shrink-0 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50">Salin Permohonan</button>
+            @endif
+        </div>
+    @endif
+
+    @if ($source = $this->copySource)
+        <div class="p-3 bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl">
+            Permohonan ini disalin daripada permohonan
+            @if (! $source->trashed() && auth()->user()->can('view', $source))
+                <a href="{{ route('application.view', $source->uuid) }}" class="font-bold underline">{{ $source->reference_number }}</a>
+            @else
+                <strong>{{ $source->reference_number }}</strong>
+            @endif
+            (keputusan JTICT Kaji Semula).
+        </div>
+    @endif
+
     @if ($this->preJtictAmendmentDecision)
         <div class="p-4 bg-orange-50 border-l-4 border-orange-500 text-orange-900 text-xs rounded-xl space-y-2">
             <p class="font-bold">Keputusan Pra JTICT: Ditolak dengan Pindaan ({{ $this->preJtictAmendmentDecision->decision_date->format('d/m/Y') }}). Ulasan Urus Setia:</p>
@@ -341,28 +374,42 @@
         </div>
     @endif
 
-    {{-- PP4.2: sejarah keputusan Pra JTICT (baca sahaja; terkini dahulu). Nama perekod hanya kepada Urus Setia (K5). --}}
-    @if ($this->preJtictDecisions->isNotEmpty())
+    {{-- PP4.3B: sejarah keputusan Pra JTICT & Mesyuarat JTICT (application_decisions; baca sahaja; kronologi,
+         terdahulu dahulu). Nama perekod & masa rekod hanya kepada Urus Setia; pengguna lain melihat "Urus Setia". --}}
+    @if ($this->decisionHistory->isNotEmpty())
         @php($showDeciderNames = auth()->user()->hasRole('pentadbir_urus_setia'))
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2">Sejarah Keputusan Pra JTICT</h3>
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2">Sejarah Keputusan Permohonan</h3>
             <ol class="space-y-3">
-                @foreach ($this->preJtictDecisions as $record)
-                    <li wire:key="pre-jtict-decision-{{ $record->id }}" class="text-xs p-3 rounded-xl {{ $loop->first ? 'bg-slate-50 border border-slate-200' : '' }}">
+                @foreach ($this->decisionHistory as $record)
+                    <li wire:key="decision-{{ $record->id }}" class="text-xs p-3 rounded-xl {{ $loop->last ? 'bg-slate-50 border border-slate-200' : 'border border-transparent' }}">
                         <div class="flex flex-wrap items-center gap-2">
                             <span @class([
+                                'px-2 py-0.5 font-bold rounded-full text-[10px]',
+                                'bg-green-100 text-green-900' => $record->stage === \App\Enums\DecisionStage::PreJtict,
+                                'bg-indigo-100 text-indigo-900' => $record->stage === \App\Enums\DecisionStage::Jtict,
+                            ])>{{ $record->stage === \App\Enums\DecisionStage::Jtict ? 'Mesyuarat JTICT' : 'Pra JTICT' }}</span>
+                            <span @class([
                                 'font-bold',
-                                'text-green-800' => $record->decision === \App\Enums\ApplicationDecision::Accepted,
+                                'text-green-800' => in_array($record->decision, [\App\Enums\ApplicationDecision::Accepted, \App\Enums\ApplicationDecision::Approved], true),
                                 'text-orange-800' => $record->decision === \App\Enums\ApplicationDecision::AmendmentRequired,
-                                'text-red-800' => $record->decision === \App\Enums\ApplicationDecision::Rejected,
+                                'text-amber-800' => $record->decision === \App\Enums\ApplicationDecision::Review,
+                                'text-red-800' => in_array($record->decision, [\App\Enums\ApplicationDecision::Rejected, \App\Enums\ApplicationDecision::NotApproved], true),
                             ])>{{ $record->decision->label() }}</span>
-                            @if ($loop->first)
+                            @if ($loop->last)
                                 <span class="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded-full text-[10px]">Terkini</span>
                             @endif
                             <span class="text-slate-600">Tarikh keputusan: {{ $record->decision_date->format('d/m/Y') }}</span>
-                            <span class="text-slate-400">• Direkodkan {{ $record->created_at->format('d/m/Y h:i A') }}</span>
-                            <span class="text-slate-500">• Urus Setia{{ $showDeciderNames && $record->decidedBy ? ': ' . $record->decidedBy->name : '' }}</span>
                         </div>
+                        <dl class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-slate-500">
+                            @if ($record->meeting)
+                                <div class="flex gap-1"><dt>Mesyuarat:</dt><dd class="text-slate-700">{{ $record->meeting->label() }} ({{ $record->meeting->meeting_date->format('d/m/Y') }})</dd></div>
+                            @endif
+                            <div class="flex gap-1"><dt>Direkodkan oleh:</dt><dd class="text-slate-700">{{ $showDeciderNames && $record->decidedBy ? $record->decidedBy->name : 'Urus Setia' }}</dd></div>
+                            @if ($showDeciderNames)
+                                <div class="flex gap-1"><dt>Masa rekod:</dt><dd class="text-slate-700">{{ $record->created_at->format('d/m/Y h:i A') }}</dd></div>
+                            @endif
+                        </dl>
                         <p class="mt-1 {{ $record->remarks ? 'text-slate-700 whitespace-pre-line' : 'text-slate-400 italic' }}">{{ $record->remarks ?: 'Tiada ulasan.' }}</p>
                     </li>
                 @endforeach

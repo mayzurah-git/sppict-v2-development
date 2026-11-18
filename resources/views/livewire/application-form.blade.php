@@ -67,6 +67,14 @@
         </div>
     @endif
 
+    {{-- PP4.3C: Draf salinan daripada permohonan Kaji Semula --}}
+    @if ($this->copySource)
+        <div class="px-4 py-3.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900 space-y-1">
+            <p class="font-bold">Permohonan ini disalin daripada {{ $this->copySource->reference_number }} (keputusan JTICT Kaji Semula).</p>
+            <p>Semak dan kemas kini maklumat Fasa 1 hingga 3. Pilih semula pilihan yang kosong (pilihan tidak aktif tidak disalin), muat naik semula dokumen Fasa 4, dan lantik Pegawai Bertanggungjawab sebelum menghantar.</p>
+        </div>
+    @endif
+
     {{-- PP4.2: ulasan keputusan Pra JTICT "Ditolak dengan Pindaan" (baca sahaja) --}}
     @if ($this->preJtictAmendmentDecision)
         <div class="px-4 py-3.5 rounded-xl bg-orange-50 border border-orange-200 text-sm text-orange-900 space-y-1">

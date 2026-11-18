@@ -20,6 +20,7 @@ use App\Models\ProcurementMethod;
 use App\Models\ProcurementType;
 use App\Models\ProjectCategory;
 use App\Models\User;
+use App\Notifications\ApplicationDecisionRecorded;
 use App\Services\ApplicationDecisionService;
 use App\Services\ApplicationReviewService;
 use App\Services\ApplicationSubmissionService;
@@ -375,7 +376,7 @@ class PreJtictDecisionTest extends TestCase
             ->all();
         $this->assertEqualsCanonicalizing(
             ['preJtictDecisions', 'preJtictAmendmentDecision', 'preJtictEarliestDate', 'openPreJtictModal', 'closePreJtictModal', 'submitPreJtictDecision',
-                'preJtictAcceptanceBlocker', 'submitJtictDecision'],
+                'preJtictAcceptanceBlocker', 'submitJtictDecision', 'decisionHistory' /* PP4.3B: paparan sejarah, baca sahaja */],
             $actions
         );
 
@@ -410,8 +411,13 @@ class PreJtictDecisionTest extends TestCase
         $this->assertSame($otherSnapshot, $other->fresh()->getAttributes(), 'Permohonan lain tidak berubah');
         $this->assertSame(0, ApplicationReview::where('to_status', 'PRE_JTICT_AMENDMENT')->count(), 'Keputusan tidak disimpan dalam application_reviews');
 
+        // PP4.3D: keputusan kini memaklumkan Pendaftar & Pegawai Utama melalui ApplicationDecisionRecorded sahaja;
+        // tiada notifikasi atau e-mel lain (asal: assertNothingSent sebelum PP4.3D).
+        $expected = app(ApplicationDecisionService::class)->decisionRecipients($application->fresh())->count();
+        $this->assertGreaterThan(0, $expected);
+        Notification::assertSentTimes(ApplicationDecisionRecorded::class, $expected);
+        Notification::assertCount($expected);
         Mail::assertNothingSent();
-        Notification::assertNothingSent();
     }
 
     // --- SENARAI, BUTIRAN & SEJARAH ---
@@ -464,18 +470,18 @@ class PreJtictDecisionTest extends TestCase
             ->assertSee('Pegawai Bertanggungjawab')
             ->assertSee('Sejarah Semakan')
             ->assertSee($this->meeting->label())
-            ->assertDontSee('Sejarah Keputusan Pra JTICT');
+            ->assertDontSee('Sejarah Keputusan Permohonan'); // PP4.3B: tajuk bahagian sejarah bersatu
 
         $this->assertSame($before, $application->fresh()->getAttributes(), 'Paparan tidak mengubah permohonan');
 
         $this->decideViaUi($application, Decision::AmendmentRequired, self::REMARKS, today()->toDateString())->assertHasNoErrors();
 
         Livewire::actingAs($this->urusSetia)->test(ViewApplication::class, ['uuid' => $application->uuid])
-            ->assertSee('Sejarah Keputusan Pra JTICT')
+            ->assertSee('Sejarah Keputusan Permohonan')
             ->assertSee('Siti Urus Setia');
 
         Livewire::actingAs($this->applicant)->test(ViewApplication::class, ['uuid' => $application->uuid])
-            ->assertSee('Sejarah Keputusan Pra JTICT')
+            ->assertSee('Sejarah Keputusan Permohonan')
             ->assertSee('Ditolak dengan Pindaan')
             ->assertSee(today()->format('d/m/Y'))
             ->assertSee(self::REMARKS)

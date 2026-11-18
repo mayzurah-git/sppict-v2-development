@@ -11,6 +11,7 @@ use App\Models\Application;
 use App\Models\ApplicationDecision as ApplicationDecisionRecord;
 use App\Models\ApplicationReview;
 use App\Models\User;
+use App\Services\ApplicationCopyService;
 use App\Services\ApplicationDecisionService;
 use App\Services\ApplicationReviewService;
 use App\Services\OfficerHandoverService;
@@ -185,6 +186,20 @@ class ViewApplication extends Component
     }
 
     /**
+     * PP4.3B: sejarah keputusan permohonan (Pra JTICT dan Mesyuarat JTICT) daripada application_decisions,
+     * mengikut kronologi tarikh keputusan (terdahulu dahulu). Baca sahaja; kebenaran paparan = `view`.
+     */
+    #[Computed]
+    public function decisionHistory(): Collection
+    {
+        return $this->application->decisions()
+            ->with(['decidedBy:id,name', 'meeting.meetingName', 'meeting.meetingNumber', 'meeting.meetingYear'])
+            ->orderBy('decision_date')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
      * PP4.2: ulasan Pra JTICT "Ditolak dengan Pindaan" terkini untuk pemohon.
      */
     #[Computed]
@@ -281,7 +296,7 @@ class ViewApplication extends Component
     private function finishPreJtict(?string $message = null, ?string $error = null): void
     {
         $this->application->refresh();
-        unset($this->preJtictDecisions, $this->preJtictAmendmentDecision, $this->preJtictEarliestDate, $this->preJtictAcceptanceBlocker);
+        unset($this->preJtictDecisions, $this->preJtictAmendmentDecision, $this->preJtictEarliestDate, $this->preJtictAcceptanceBlocker, $this->decisionHistory);
         $this->showPreJtictModal = false;
         $this->preJtictDecision = '';
         $this->preJtictDate = '';
@@ -392,7 +407,7 @@ class ViewApplication extends Component
     private function finishJtict(?string $message = null, ?string $error = null): void
     {
         $this->application->refresh();
-        unset($this->jtictPendingReason);
+        unset($this->jtictPendingReason, $this->decisionHistory);
         $this->showJtictModal = false;
         $this->jtictDecision = '';
         $this->jtictDate = '';
@@ -404,6 +419,57 @@ class ViewApplication extends Component
         if ($error) {
             session()->flash('review_error', $error);
         }
+    }
+
+    // --- PP4.3C: SALIN PERMOHONAN (KAJI SEMULA) ---
+
+    /**
+     * Keputusan JTICT terkini Kaji Semula (permohonan layak disalin, tertakluk polisi `copy`).
+     */
+    #[Computed]
+    public function isReviewOutcome(): bool
+    {
+        return $this->application->statusEnum() === ApplicationStatus::Closed
+            && $this->application->latestJtictDecision()->first()?->decision === ApplicationDecision::Review;
+    }
+
+    /**
+     * Salinan permohonan ini (termasuk yang telah dipadam; O8: satu salinan sahaja).
+     */
+    #[Computed]
+    public function applicationCopy(): ?Application
+    {
+        return $this->application->copies()->withTrashed()->first();
+    }
+
+    /**
+     * Permohonan asal bagi salinan ini.
+     */
+    #[Computed]
+    public function copySource(): ?Application
+    {
+        return $this->application->copiedFromApplication;
+    }
+
+    /**
+     * Semua syarat (O7, O8, Kaji Semula) disemak semula oleh ApplicationCopyService dalam transaksi.
+     */
+    public function copyApplication(ApplicationCopyService $service)
+    {
+        $this->authorize('copy', $this->application);
+
+        try {
+            $copy = $service->copy($this->application, Auth::user());
+        } catch (AuthorizationException) {
+            unset($this->applicationCopy);
+            session()->flash('review_error', 'Permohonan ini tidak boleh disalin atau telah mempunyai salinan.');
+
+            return null;
+        }
+
+        session()->flash('message', "Salinan {$copy->reference_number} telah dicipta sebagai Draf. Sila semak dan lengkapkan maklumat sebelum dihantar.");
+
+        return $this->redirectRoute('application.edit', $copy->uuid);
     }
 
     #[Computed]

@@ -120,6 +120,24 @@ class ApplicationPolicy
     }
 
     /**
+     * PP4.3C: Salin Permohonan bagi keputusan JTICT terkini Kaji Semula (keputusan pemilik 17/11/2026):
+     * - O7: pengguna boleh mendaftar permohonan (create) dan berada dalam agensi permohonan, serta merupakan
+     *   Pegawai Utama / Kedua aktif atau pendaftar asal (Urus Setia bagi pihak agensi lain tertolak oleh semakan agensi);
+     * - O8: satu salinan sahaja, termasuk salinan yang telah dipadam;
+     * - O10: tiada had masa.
+     */
+    public function copy(User $user, Application $application): bool
+    {
+        return $this->create($user)
+            && ! $application->trashed()
+            && $application->statusEnum() === ApplicationStatus::Closed
+            && $application->latestJtictDecision()->first()?->decision === ApplicationDecision::Review
+            && ! $application->copies()->withTrashed()->exists()
+            && $this->inSameAgency($user, $application)
+            && ($user->id === $application->applicant_id || $application->isActiveOfficer($user));
+    }
+
+    /**
      * PP4.3A: senarai keputusan Mesyuarat JTICT. Peranan sama dengan decideJtict().
      */
     public function viewJtictQueue(User $user): bool

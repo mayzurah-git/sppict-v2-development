@@ -428,6 +428,18 @@ Penemuan kod yang mempengaruhi reka bentuk:
 | **O11** | Anomali Mesyuarat 1 (tarikh buka > tarikh tutup): adakah pengesahan modul Mesyuarat perlu diperbaiki? | Fasa berasingan (bukan PP4.3) | — |
 | **O12** | Commit garis dasar working tree sebelum PP4.3A | Disyorkan | PP4.3A |
 
+**Keputusan pemilik sistem (17/11/2026) – O7, O8 dan O10: semua cadangan dipersetujui.**
+
+- **O7:**
+  - salinan boleh dibuat oleh pegawai aktif (Utama/Kedua) dalam agensi permohonan;
+  - pendaftar asal juga boleh menyalin, tetapi hanya jika masih dalam agensi yang sama;
+  - Urus Setia yang mendaftar bagi pihak agensi tidak boleh menyalin;
+  - pendaftar salinan ialah pengguna yang menyalin.
+- **O8:**
+  - satu salinan sahaja; salinan yang telah dipadam turut dikira, jadi permohonan asal tidak boleh disalin semula;
+  - dikuatkuasakan melalui kod, tanpa migrasi atau indeks unik.
+- **O10:** tiada had masa untuk menyalin.
+
 ---
 
 ## 13. Cadangan urutan pembangunan

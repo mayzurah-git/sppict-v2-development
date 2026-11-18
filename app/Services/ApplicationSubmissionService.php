@@ -257,9 +257,10 @@ class ApplicationSubmissionService
 
     /**
      * Jana nombor rujukan seterusnya berdasarkan nombor tertinggi tahun semasa
-     * (termasuk rekod yang dipadam) supaya tidak bertindih.
+     * (termasuk rekod yang dipadam) supaya tidak bertindih. Mesti dipanggil dalam transaksi.
+     * PP4.3C: turut digunakan oleh ApplicationCopyService (salinan bermula sebagai Draf).
      */
-    private function nextReferenceNumber(bool $isDraft): string
+    public function nextReferenceNumber(bool $isDraft): string
     {
         $prefix = sprintf('SPPICT/%s/%s', date('Y'), $isDraft ? 'DRAFT-' : '');
 

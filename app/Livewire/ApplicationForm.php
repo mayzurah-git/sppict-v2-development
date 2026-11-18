@@ -553,6 +553,17 @@ class ApplicationForm extends Component
         unset($this->targetMeeting);
     }
 
+    /**
+     * PP4.3C: permohonan asal bagi Draf salinan (Kaji Semula), untuk notis dalam borang.
+     */
+    #[Computed]
+    public function copySource(): ?Application
+    {
+        return $this->applicationId
+            ? Application::find($this->applicationId)?->copiedFromApplication
+            : null;
+    }
+
     #[Computed]
     public function applicationUuid(): ?string
     {

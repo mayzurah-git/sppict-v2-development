@@ -15,8 +15,10 @@ use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password as PasswordBroker;
+use Illuminate\Support\Str;
 use Livewire\Exceptions\PublicPropertyNotFoundException;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
@@ -361,8 +363,9 @@ class SuperadminUserManagementTest extends TestCase
     {
         Notification::fake();
         config(['audit.console' => true]);
-        $logPath = storage_path('logs/laravel.log');
-        $logBefore = is_file($logPath) ? (string) file_get_contents($logPath) : '';
+        // Log harian (LOG_CHANNEL=daily): nama fail bergantung pada tarikh. Rekod saiz semua fail log
+        // sebelum ujian supaya hanya bahagian baharu dibaca (termasuk fail baharu jika merentasi tengah malam).
+        $logSizesBefore = $this->logFileSizes();
 
         $this->fill(Livewire::actingAs($this->superadmin)->test(UserManagement::class)->call('openModal'))->call('saveUser');
         $user = User::where('email', 'aminah@ns.gov.my')->firstOrFail();
@@ -382,10 +385,51 @@ class SuperadminUserManagementTest extends TestCase
             $this->assertStringNotContainsString($reset, $raw);
         }
 
-        $logAfter = is_file($logPath) ? (string) file_get_contents($logPath) : '';
-        $newLog = substr($logAfter, strlen($logBefore));
+        // Penanda membuktikan log benar-benar ditulis ke fail yang dibaca oleh ujian ini
+        // (ujian gagal jika tiada fail log ditemui atau saluran log tidak menulis ke storage/logs).
+        $marker = 'ujian-log-token-' . Str::uuid();
+        Log::info($marker);
+
+        $newLog = $this->newLogContent($logSizesBefore);
+        $this->assertStringContainsString($marker, $newLog, 'Log tidak ditulis ke fail log yang disemak');
         $this->assertStringNotContainsString($created, $newLog);
         $this->assertStringNotContainsString($reset, $newLog);
+    }
+
+    /**
+     * Saiz setiap fail log aplikasi (laravel.log atau laravel-YYYY-MM-DD.log) dalam storage/logs.
+     *
+     * @return array<string, int>
+     */
+    private function logFileSizes(): array
+    {
+        clearstatcache();
+        $sizes = [];
+
+        foreach (glob(storage_path('logs/laravel*.log')) ?: [] as $path) {
+            $sizes[$path] = (int) filesize($path);
+        }
+
+        return $sizes;
+    }
+
+    /**
+     * Kandungan log yang ditulis selepas $sizesBefore direkodkan; hanya bahagian baharu setiap fail dibaca.
+     *
+     * @param  array<string, int>  $sizesBefore
+     */
+    private function newLogContent(array $sizesBefore): string
+    {
+        $content = '';
+
+        foreach (array_keys($this->logFileSizes()) as $path) {
+            $handle = fopen($path, 'rb');
+            fseek($handle, $sizesBefore[$path] ?? 0);
+            $content .= (string) stream_get_contents($handle);
+            fclose($handle);
+        }
+
+        return $content;
     }
 
     // =========================================================
