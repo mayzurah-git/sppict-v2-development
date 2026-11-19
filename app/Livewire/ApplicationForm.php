@@ -100,6 +100,7 @@ class ApplicationForm extends Component
             $this->form->procurement_method_id = $application->procurement_method_id ?? '';
             $this->form->ceiling_cost = $application->ceiling_cost;
             $this->form->estimated_cost = $application->estimated_cost;
+            $this->form->sst_applicable = (bool) $application->sst_applicable;
             $this->form->expected_duration_months = $application->expected_duration_months;
             $this->form->outcome_code = $application->outcome_code ?? '';
 

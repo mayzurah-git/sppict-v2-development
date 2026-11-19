@@ -31,6 +31,9 @@ class ApplicationForm extends Form
     // [['project_category_id' => int, 'items' => [...]], ...]
     public array $details = [];
 
+    // PP4.5: SST dikira hanya apabila pemohon menanda kotak SST (lalai tidak ditanda bagi permohonan baharu).
+    public bool $sst_applicable = false;
+
     // --- FASA 4: DOKUMEN SOKONGAN (PDF) ---
     public $proposal_paper = null;
     public $presentation_slide = null;
@@ -118,6 +121,7 @@ class ApplicationForm extends Form
             'details.*.items.*.technical_specifications' => 'required|string|min:3',
             'details.*.items.*.unit_quantity' => 'required|integer|min:1',
             'details.*.items.*.unit_cost' => 'required|numeric|min:0',
+            'sst_applicable' => 'boolean',
         ], [
             'details.*.project_category_id.required' => 'Kategori projek wajib dipilih.',
             'details.*.project_category_id.integer' => 'Kategori projek tidak sah.',
@@ -127,11 +131,11 @@ class ApplicationForm extends Form
             'details.*.items.*.unit_cost.min' => 'Kos seunit tidak boleh kurang daripada 0.00.',
         ]);
 
-        // Jumlah Keseluruhan (termasuk SST) tidak boleh melebihi Anggaran Kos Siling
+        // Jumlah Keseluruhan (termasuk SST jika ditanda) tidak boleh melebihi Anggaran Kos Siling
         $summary = $this->costSummary();
 
         if ($summary['ceiling_balance'] < 0) {
-            $message = 'Jumlah Keseluruhan termasuk SST (RM ' . number_format($summary['total'], 2) .
+            $message = 'Jumlah Keseluruhan' . ($summary['sst_applicable'] ? ' termasuk SST' : '') . ' (RM ' . number_format($summary['total'], 2) .
                        ') melebihi Anggaran Kos Siling (RM ' . number_format($summary['ceiling'], 2) .
                        ') sebanyak RM ' . number_format(abs($summary['ceiling_balance']), 2) . '.';
 
@@ -242,13 +246,14 @@ class ApplicationForm extends Form
     public function costSummary(): array
     {
         $subtotalSen = $this->subtotalSen();
-        $sstSen = (int) round($subtotalSen * $this->sstRate() / 100);
+        $sstSen = $this->sst_applicable ? (int) round($subtotalSen * $this->sstRate() / 100) : 0;
         $totalSen = $subtotalSen + $sstSen;
         $ceilingSen = $this->toSen($this->ceiling_cost);
         $estimatedSen = $this->toSen($this->estimated_cost);
 
         return [
             'subtotal' => $subtotalSen / 100,
+            'sst_applicable' => $this->sst_applicable,
             'sst_rate' => $this->sstRate(),
             'sst_amount' => $sstSen / 100,
             'total' => $totalSen / 100,
@@ -265,6 +270,11 @@ class ApplicationForm extends Form
      */
     public function hasManualSstItem(): bool
     {
+        // Hanya berkaitan apabila SST dikira oleh sistem (elak SST dikira dua kali)
+        if (! $this->sst_applicable) {
+            return false;
+        }
+
         foreach ($this->details as $group) {
             foreach (($group['items'] ?? []) as $item) {
                 if (preg_match('/\bSST\b/i', (string) ($item['technical_specifications'] ?? ''))) {

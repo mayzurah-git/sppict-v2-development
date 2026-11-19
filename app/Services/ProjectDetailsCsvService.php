@@ -48,7 +48,7 @@ class ProjectDetailsCsvService
     {
         $lines = [self::HEADERS];
         $lines[] = ['# PANDUAN: baris bermula dengan # diabaikan semasa import. Isi item mulai baris kosong di bawah panduan ini.'];
-        $lines[] = ['# Kuantiti: nombor bulat 1 hingga ' . number_format(self::MAX_QUANTITY) . '. Kos seunit: RM sebelum SST (contoh 1500.00). SST dikira oleh sistem.'];
+        $lines[] = ['# Kuantiti: nombor bulat 1 hingga ' . number_format(self::MAX_QUANTITY) . '. Kos seunit: RM sebelum SST (contoh 1500.00). SST dikira oleh sistem jika kotak SST ditanda dalam borang.'];
         $lines[] = ['# Maksimum ' . self::MAX_ROWS . ' item. Kod kategori projek yang sah:'];
 
         foreach ($this->activeCategories() as $category) {

@@ -21,7 +21,7 @@
     <fieldset class="space-y-3">
         <legend class="text-xs font-extrabold tracking-[0.08em] uppercase {{ $theme['eyebrow'] }}">Kos &amp; Tempoh</legend>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <x-form.input size="lg" :focus-within="$theme['inputWithin']" prefix="RM" label="Anggaran Kos Siling" type="number" step="0.01" inputmode="decimal" wire:model.blur="form.ceiling_cost" :error="$errors->first('form.ceiling_cost')" required placeholder="0.00" hint="Had maksimum termasuk SST." />
+            <x-form.input size="lg" :focus-within="$theme['inputWithin']" prefix="RM" label="Anggaran Kos Siling" type="number" step="0.01" inputmode="decimal" wire:model.blur="form.ceiling_cost" :error="$errors->first('form.ceiling_cost')" required placeholder="0.00" hint="Had maksimum termasuk SST (jika dikenakan)." />
             <x-form.input size="lg" :focus-within="$theme['inputWithin']" prefix="RM" label="Anggaran Kos Projek" type="number" step="0.01" inputmode="decimal" wire:model.blur="form.estimated_cost" :error="$errors->first('form.estimated_cost')" required placeholder="0.00" />
             <x-form.input size="lg" :focus-within="$theme['inputWithin']" suffix="bulan" label="Tempoh Pelaksanaan" type="number" inputmode="numeric" wire:model="form.expected_duration_months" :error="$errors->first('form.expected_duration_months')" required placeholder="Contoh: 12" />
         </div>

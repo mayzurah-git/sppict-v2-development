@@ -58,6 +58,7 @@ class ApplicationCopyService
                 'ceiling_cost' => $locked->ceiling_cost,
                 'estimated_cost' => $locked->estimated_cost,
                 'subtotal_cost' => $locked->subtotal_cost,
+                'sst_applicable' => $locked->sst_applicable,
                 'sst_rate' => $locked->sst_rate,
                 'sst_amount' => $locked->sst_amount,
                 'total_cost' => $locked->total_cost,

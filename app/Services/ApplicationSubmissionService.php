@@ -304,7 +304,9 @@ class ApplicationSubmissionService
             'ceiling_cost' => $form->ceiling_cost ?: 0,
             'estimated_cost' => $form->estimated_cost ?: 0,
             'subtotal_cost' => $summary['subtotal'],
-            'sst_rate' => $summary['sst_rate'],
+            // PP4.5: SST hanya apabila kotak SST ditanda; kadar tidak disimpan jika tidak dikenakan.
+            'sst_applicable' => $summary['sst_applicable'],
+            'sst_rate' => $summary['sst_applicable'] ? $summary['sst_rate'] : null,
             'sst_amount' => $summary['sst_amount'],
             'total_cost' => $summary['total'],
             'expected_duration_months' => $form->expected_duration_months ?: 1,

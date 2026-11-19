@@ -190,7 +190,7 @@
                     <p class="text-xs font-bold text-slate-800">RM {{ number_format($application->estimated_cost, 2) }}</p>
                 </div>
                 <div>
-                    <p class="text-[11px] text-slate-400">Jumlah Keseluruhan (termasuk SST)</p>
+                    <p class="text-[11px] text-slate-400">Jumlah Keseluruhan ({{ $application->sst_applicable ? 'termasuk SST' : 'SST tidak dikenakan' }})</p>
                     <p class="text-sm font-black text-emerald-600">RM {{ number_format($application->total_cost ?? 0, 2) }}</p>
                 </div>
                 <div>
@@ -232,8 +232,13 @@
                         <td class="p-2.5 text-right font-bold">{{ number_format($application->subtotal_cost ?? 0, 2) }}</td>
                     </tr>
                     <tr>
-                        <td colspan="4" class="p-2.5 text-right">SST ({{ rtrim(rtrim(number_format($application->sst_rate ?? 0, 2), '0'), '.') }}%)</td>
-                        <td class="p-2.5 text-right font-bold">{{ number_format($application->sst_amount ?? 0, 2) }}</td>
+                        @if ($application->sst_applicable)
+                            <td colspan="4" class="p-2.5 text-right">SST ({{ rtrim(rtrim(number_format($application->sst_rate ?? 0, 2), '0'), '.') }}%)</td>
+                            <td class="p-2.5 text-right font-bold">{{ number_format($application->sst_amount ?? 0, 2) }}</td>
+                        @else
+                            <td colspan="4" class="p-2.5 text-right">SST</td>
+                            <td class="p-2.5 text-right font-bold text-slate-400">Tidak dikenakan</td>
+                        @endif
                     </tr>
                     <tr class="bg-slate-50">
                         <td colspan="4" class="p-2.5 text-right font-bold text-slate-900">Jumlah Keseluruhan</td>

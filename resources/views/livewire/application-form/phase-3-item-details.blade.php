@@ -5,7 +5,7 @@
     @php($overCeiling = $summary['ceiling_balance'] < 0)
 
     <p class="px-3.5 py-2.5 rounded-xl border text-[13px] {{ $theme['panel'] }}">
-        Masukkan kos seunit <strong>sebelum SST</strong>. SST {{ $sstRateLabel }}% dikira secara automatik ke atas Jumlah Kecil.
+        Masukkan kos seunit <strong>sebelum SST</strong>. Jika perolehan dikenakan SST, tanda kotak <strong>SST ({{ $sstRateLabel }}%)</strong> pada Ringkasan Kos Projek. SST akan dikira secara automatik ke atas Jumlah Kecil.
     </p>
 
     {{-- PP4.4: kaedah alternatif — import Perincian Projek daripada fail CSV templat sistem --}}
@@ -105,7 +105,7 @@
 
     @if ($form->hasManualSstItem())
         <div role="alert" class="px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[13px] text-amber-900">
-            Terdapat item yang mengandungi perkataan <strong>"SST"</strong>. SST telah dikira secara automatik. Sila buang item tersebut supaya SST tidak dikira dua kali.
+            Terdapat item yang mengandungi perkataan <strong>"SST"</strong>. Kotak SST telah ditanda, jadi SST dikira secara automatik. Sila buang item tersebut supaya SST tidak dikira dua kali.
         </div>
     @endif
 

@@ -30,6 +30,8 @@ class ApplicationCostSummaryTest extends TestCase
             ->set('form.ceiling_cost', $ceilingCost)
             ->set('form.estimated_cost', $estimatedCost)
             ->set('form.details', [['project_category_id' => $this->masterId(ProjectCategory::class, 'projek_baharu'), 'items' => $items]])
+            // PP4.5: SST hanya dikira apabila kotak SST ditanda
+            ->set('form.sst_applicable', true)
             ->set('currentStep', 3);
     }
 

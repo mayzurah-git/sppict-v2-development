@@ -222,7 +222,17 @@
                     <h2 id="tajuk-kos" class="text-base font-extrabold text-slate-900">Ringkasan Kos Projek</h2>
                     <dl class="flex flex-col gap-2 text-sm">
                         <div class="flex justify-between gap-3"><dt class="text-slate-600">Jumlah Kecil (sebelum SST)</dt><dd class="font-bold tabular-nums">RM {{ number_format($summary['subtotal'], 2) }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-slate-600">SST ({{ $sstRateLabel }}%)</dt><dd class="font-bold tabular-nums">RM {{ number_format($summary['sst_amount'], 2) }}</dd></div>
+                        <div class="flex justify-between gap-3">
+                            <dt>
+                                {{-- PP4.5: SST hanya dikira apabila ditanda oleh pemohon --}}
+                                <label for="sst-applicable" class="inline-flex items-center gap-2 text-slate-700 font-semibold cursor-pointer">
+                                    <input id="sst-applicable" type="checkbox" wire:model.live="form.sst_applicable" class="w-4 h-4 rounded border-slate-300 {{ $theme['input'] }}">
+                                    SST ({{ $sstRateLabel }}%)
+                                </label>
+                            </dt>
+                            <dd @class(['font-bold tabular-nums', 'text-slate-400' => ! $summary['sst_applicable']])>{{ $summary['sst_applicable'] ? 'RM ' . number_format($summary['sst_amount'], 2) : 'Tidak dikenakan' }}</dd>
+                        </div>
+                        @error('form.sst_applicable') <p class="text-red-600 text-xs">{{ $message }}</p> @enderror
                         <div class="flex justify-between gap-3 pt-2 border-t border-slate-100"><dt class="font-extrabold">Jumlah Keseluruhan</dt><dd @class(['text-[17px] font-black tabular-nums', 'text-red-700' => $overCeiling])>RM {{ number_format($summary['total'], 2) }}</dd></div>
                     </dl>
                     <div class="flex flex-col gap-1.5">
