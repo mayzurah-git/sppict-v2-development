@@ -1,6 +1,6 @@
 # Laporan Pelaksanaan PP4.4 – Templat dan Import CSV Perincian Projek
 
-**Tarikh:** 19/11/2026 · **Branch:** `feature/pp4-csv-import` (dari commit `62b4bf2`, PP4.3A–D) · **Status:** PASS (ujian automatik). Belum di-commit dan belum diuji dalam UAT.
+**Tarikh:** 19/11/2026 · **Branch:** `feature/pp4-csv-import` (dari commit `62b4bf2`, PP4.3A–D) · **Status:** PASS (ujian automatik dan ujian manual pemilik dalam persekitaran pembangunan). Di-commit sebagai `577afb2`. Belum diuji dalam UAT.
 
 **Rujukan:** Laporan Audit Fasa PP0 – Modul Permohonan Projek, §7 dan isu T5.
 
@@ -83,10 +83,13 @@
   - simpan draf;
   - semakan Kos Siling selepas import.
 - Suite penuh: **587/587 PASS** (4,512 assertion).
+- Ujian manual pemilik (19/11/2026, persekitaran pembangunan): templat dimuat turun, diisi dalam Excel dan berjaya diimport ke Fasa 3.
 
 ## 7. Belum dilakukan / cadangan UAT
 
-- Ujian manual dalam pelayar, terutamanya:
-  - buka templat dalam Excel dan simpan semula sebagai "CSV UTF-8" dan "CSV (Comma delimited)";
+- Ujian UAT yang dicadangkan:
+  - simpan templat dalam Excel sebagai "CSV UTF-8" dan "CSV (Comma delimited)";
+  - fail ditolak (tajuk salah, kod kategori salah) dan senarai ralat bernombor baris;
+  - amaran Ganti apabila perincian sedia ada telah diisi (Ganti dan Batal);
   - paparan modal pada skrin kecil.
 - Gabungkan ke persekitaran UAT selepas UAT PP4.3 selesai, atau sebagai kitaran UAT berasingan.
