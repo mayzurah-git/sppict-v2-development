@@ -17,7 +17,9 @@ use App\Models\User;
 use Livewire\WithFileUploads;
 use App\Livewire\Forms\ApplicationForm as ApplicationFormObject;
 use App\Services\ApplicationSubmissionService;
+use App\Services\ProjectDetailsCsvService;
 use App\Services\SubmissionClosedException;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -53,6 +55,20 @@ class ApplicationForm extends Component
     // Disahkan semula di pelayan semasa disimpan (ApplicationSubmissionService::targetAgencyId).
     #[Locked]
     public ?int $confirmedAgencyId = null;
+
+    // PP4.4: fail CSV Perincian Projek (sementara; dibuang selepas diproses, tidak disimpan kekal).
+    public $detailsCsv = null;
+
+    // PP4.4: hasil import yang sah, menunggu pengesahan "Ganti" kerana perincian sedia ada telah diisi.
+    // Dikunci supaya tidak boleh diubah dari pelayar.
+    #[Locked]
+    public ?array $pendingCsvDetails = null;
+
+    #[Locked]
+    public int $pendingCsvItemCount = 0;
+
+    // PP4.4: mesej kejayaan import (paparan sahaja).
+    public ?string $csvImportNotice = null;
 
     public function mount(?string $uuid = null)
     {
@@ -170,6 +186,145 @@ class ApplicationForm extends Component
             unset($this->form->details[$categoryIndex]['items'][$itemIndex]);
             $this->form->details[$categoryIndex]['items'] = array_values($this->form->details[$categoryIndex]['items']);
         }
+    }
+
+    // --- PP4.4: TEMPLAT & IMPORT CSV PERINCIAN PROJEK (FASA 3) ---
+
+    public function downloadDetailsTemplate(ProjectDetailsCsvService $csv)
+    {
+        $this->authorizeFormAccess();
+
+        $content = $csv->template();
+
+        return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, 'templat-perincian-projek.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Fail CSV dipilih: sahkan format & kandungan (semua-atau-tiada). Medan kosong diisi terus;
+     * jika perincian sedia ada telah diisi, hasil disimpan sementara sehingga pengguna sahkan "Ganti".
+     */
+    public function updatedDetailsCsv(): void
+    {
+        $csv = app(ProjectDetailsCsvService::class);
+        $this->authorizeFormAccess();
+        $this->csvImportNotice = null;
+        $this->cancelCsvReplace();
+
+        try {
+            $this->validate([
+                'detailsCsv' => ['required', 'file', 'max:' . ProjectDetailsCsvService::MAX_FILE_KB, 'extensions:csv', 'mimetypes:text/plain,text/csv,application/csv'],
+            ], [
+                'detailsCsv.required' => 'Sila pilih fail CSV.',
+                'detailsCsv.file' => 'Fail gagal dimuat naik. Sila cuba semula.',
+                'detailsCsv.max' => 'Saiz fail CSV tidak boleh melebihi 1MB.',
+                'detailsCsv.extensions' => 'Hanya fail .csv daripada templat sistem dibenarkan.',
+                'detailsCsv.mimetypes' => 'Hanya fail .csv daripada templat sistem dibenarkan.',
+            ]);
+
+            $result = $csv->parse($this->detailsCsv->getRealPath());
+        } finally {
+            $this->discardCsvUpload();
+        }
+
+        if ($result['errors']) {
+            throw ValidationException::withMessages(['detailsCsv' => $result['errors']]);
+        }
+
+        if ($this->hasEnteredDetails()) {
+            $this->pendingCsvDetails = $result['details'];
+            $this->pendingCsvItemCount = $result['item_count'];
+
+            return;
+        }
+
+        $this->applyCsvDetails($result['details'], $result['item_count']);
+    }
+
+    public function confirmCsvReplace(): void
+    {
+        $this->authorizeFormAccess();
+
+        if ($this->pendingCsvDetails === null) {
+            return;
+        }
+
+        $this->applyCsvDetails($this->pendingCsvDetails, $this->pendingCsvItemCount);
+        $this->cancelCsvReplace();
+    }
+
+    public function cancelCsvReplace(): void
+    {
+        $this->pendingCsvDetails = null;
+        $this->pendingCsvItemCount = 0;
+    }
+
+    /**
+     * Kod Kategori Projek aktif yang sah dalam templat CSV.
+     */
+    #[Computed]
+    public function csvCategories(): Collection
+    {
+        return app(ProjectDetailsCsvService::class)->activeCategories();
+    }
+
+    /**
+     * Bilangan item yang telah diisi dalam Fasa 3 (baris lalai kosong tidak dikira).
+     */
+    #[Computed]
+    public function enteredDetailsCount(): int
+    {
+        $count = 0;
+
+        foreach ($this->form->details as $group) {
+            foreach (($group['items'] ?? []) as $item) {
+                if (filled(trim((string) ($item['technical_specifications'] ?? ''))) || (float) ($item['unit_cost'] ?? 0) > 0) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    private function hasEnteredDetails(): bool
+    {
+        unset($this->enteredDetailsCount);
+
+        return $this->enteredDetailsCount > 0;
+    }
+
+    private function applyCsvDetails(array $details, int $itemCount): void
+    {
+        $this->form->details = $details;
+        unset($this->enteredDetailsCount);
+        $this->resetValidation();
+
+        $this->csvImportNotice = "{$itemCount} item berjaya diimport daripada fail CSV. Sila semak butiran, kemudian klik Simpan Draf untuk menyimpan.";
+    }
+
+    private function discardCsvUpload(): void
+    {
+        if ($this->detailsCsv instanceof TemporaryUploadedFile) {
+            $this->detailsCsv->delete();
+        }
+
+        $this->detailsCsv = null;
+    }
+
+    /**
+     * Pengguna mesti boleh mencipta permohonan (borang baharu) atau mengemas kini draf ini.
+     */
+    private function authorizeFormAccess(): void
+    {
+        if ($this->applicationId) {
+            $this->authorize('update', Application::findOrFail($this->applicationId));
+
+            return;
+        }
+
+        $this->authorize('create', Application::class);
     }
 
     // --- PP3: AGENSI SASARAN (URUS SETIA BAGI PIHAK AGENSI) ---
