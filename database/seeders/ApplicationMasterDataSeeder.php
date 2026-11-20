@@ -40,7 +40,8 @@ class ApplicationMasterDataSeeder extends Seeder
             'pembekalan_perkhidmatan_one_off' => 'Pembekalan / Perkhidmatan Tidak Bermasa (One-Off)',
             'pembekalan_perkhidmatan_bermasa' => 'Pembekalan / Perkhidmatan Bermasa',
             'penyelenggaraan' => 'Penyelenggaraan',
-            'pembangunan_aplikasi' => 'Pembangunan Aplikasi',
+            // SP0 I.12 (20/11/2026): nama diselaraskan dengan Templat D
+            'pembangunan_aplikasi' => 'Pembangunan Sistem / Aplikasi',
         ]);
 
         $this->seed(ProcurementMethod::class, [

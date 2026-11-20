@@ -302,9 +302,10 @@ Nama aktiviti dan pemberat diambil **tepat** daripada spesifikasi §4.2–§4.5.
 
 `projects` kosong, sudah dipautkan kepada `Application::project()`, `mid_term_reviews` dan papan pemuka pemohon. Ia setara dengan cadangan `project_progress`. Keputusan: **guna semula `projects` sebagai rekod pemantauan projek**, dengan migration tambahan.
 
-**[FAKTA]** Definisi semasa (`2026_08_04_000001`, baris 164–185):
-- `application_id` dan `project_manager_id` ialah **NOT NULL**.
+**[FAKTA]** Definisi semasa:
+- `application_id` ialah **NOT NULL** (`2026_08_04_000001`, baris 164–185).
 - `agency_id` sudah wujud.
+- **Pembetulan (SP1, 20/11/2026):** `project_manager_id` **telah dibuang** oleh migration `2026_10_05_000003`. Ia tidak perlu diubah, dan baris berkaitan dalam jadual di bawah tidak lagi terpakai.
 
 | Tambahan / perubahan pada `projects` | Jenis | Tujuan |
 |---|---|---|
@@ -537,17 +538,17 @@ Keputusan yang telah dimuktamadkan dalam spesifikasi SP0 tidak dibangkitkan semu
 
 | # | Perkara | Cadangan |
 |---|---|---|
-| I.1 | **Projek ≥ RM500,000.** PRD §3.1 dan AGENTS.md §3 mensyaratkan kelulusan muktamad JPICT, tetapi modul JPICT belum wujud. Adakah projek ini layak dipantau selepas Lulus JTICT, atau tunggu JPICT? | Layak selepas Lulus JTICT (ikut spesifikasi SP0), dengan label "Menunggu JPICT" sehingga modul JPICT wujud |
+| I.1 | **Projek ≥ RM500,000.** PRD §3.1 dan AGENTS.md §3 mensyaratkan kelulusan muktamad JPICT, tetapi modul JPICT belum wujud. Adakah projek ini layak dipantau selepas Lulus JTICT, atau tunggu JPICT? | ✅ **Diputuskan 20/11/2026:** projek boleh dipantau selepas Lulus JTICT, dengan penanda **"Menunggu JPICT"** sehingga kelulusan JPICT diperoleh. Rekod keputusan JPICT adalah **pilihan** (L.6) |
 | I.2 | **Guna semula `projects` dan `project_progress_reports`** (tambah kolum) atau cipta jadual baharu `project_progress` seperti nama cadangan? | ✅ **Diputuskan 20/11/2026: guna semula** (F.0) |
-| I.3 | **Sumber tarikh jadual:** tarikh mula dan tamat projek serta tarikh setiap aktiviti diisi oleh Pemohon semasa "Mulakan Pemantauan"? Boleh dipinda selepas itu? Siapa meluluskan pindaan jadual? | Pemohon isi. Pindaan direkodkan dalam sejarah (tiada kelulusan) |
+| I.3 | **Sumber tarikh jadual:** tarikh mula dan tamat projek serta tarikh setiap aktiviti diisi oleh Pemohon semasa "Mulakan Pemantauan"? Boleh dipinda selepas itu? Siapa meluluskan pindaan jadual? | ✅ **Diputuskan 20/11/2026:** Pemohon menetapkan tarikh mula dan tamat projek. Pindaan dibenarkan tanpa kelulusan Urus Setia, tetapi dengan catatan justifikasi wajib. Setiap pindaan direkodkan dalam sejarah dan tidak menimpa jadual terdahulu (L.6) |
 | I.4 | **Kemajuan kewangan:** PRD §7.5 dan kolum sedia ada (`financial_*`) menyebutnya, tetapi spesifikasi SP tidak. Diperlukan? | Tangguh. Kekalkan kolum, tiada UI dalam SP1–SP4. |
 | I.5 | **Indikator dan pengesahan:** PRD menyebut lampu Hijau/Kuning/Merah (lewat 1–19% / ≥ 20%) dan "Urus Setia mengesahkan kemajuan". Spesifikasi SP menyebut varians Mendahului/Mengikut/Lewat dan Urus Setia **melihat** sahaja. Mana yang terpakai? Adakah lampu RAG masih dipaparkan berdasarkan varians? | Varians SP sebagai status utama. RAG diterbitkan daripada varians (0 / −0.01 hingga −19.99 / ≤ −20) untuk keserasian papan pemuka. Tiada pengesahan Urus Setia. |
 | I.6 | **Kriteria penutupan (Selesai):** contohnya 100% + Akuan Siap Kerja dimuat naik + tarikh siap sebenar. Siapa menutup? Bagi Penyelenggaraan (100% apabila Dokumen Kontrak selesai), bila status Selesai? | Pemohon mohon tutup, Urus Setia sahkan penutupan. Penyelenggaraan selesai pada tarikh tamat kontrak. |
 | I.7 | **Jenis jadual aktiviti:** aktiviti mana DURATION dan mana MILESTONE? | ✅ **Diputuskan 20/11/2026:** satu tarikh sasaran bagi setiap aktiviti, seperti v1. Tiada pengelasan DURATION/MILESTONE. Dirancang = pemberat aktiviti yang tarikh sasarannya ≤ tarikh penilaian (L.2). |
 | I.8 | **Format dokumen sokongan kemajuan:** PDF sahaja (AGENTS.md) atau PDF/DOCX/imej? Saiz maksimum? Dokumen wajib menyekat status Selesai aktiviti atau hanya diperlukan pada 100%? | PDF sahaja, 25 MB. Wajib apabila aktiviti 100%. |
-| I.9 | **Akses Superadmin dan Pengurusan:** kedua-duanya kini tidak boleh membuka permohonan. Bolehkah mereka melihat Senarai dan Maklumat Projek (baca sahaja)? | Ya, baca sahaja |
+| I.9 | **Akses Superadmin dan Pengurusan:** kedua-duanya kini tidak boleh membuka permohonan. Bolehkah mereka melihat Senarai dan Maklumat Projek (baca sahaja)? | ✅ **Diputuskan 20/11/2026:** **Pengurusan sahaja** boleh melihat maklumat projek (baca sahaja). Superadmin tiada akses kepada maklumat projek. |
 | I.10 | **Laporan bulanan:** tarikh akhir setiap bulan (contoh hari ke-10 bulan berikutnya) atau ikut `meetings.progress_update_deadline` sedia ada? Laporan bulan terdahulu yang tertinggal boleh dihantar lewat? | Ikut `progress_update_deadline`. Laporan lewat dibenarkan dengan tanda "Lewat". |
-| I.11 | **Pegawai yang boleh mengemas kini:** Pegawai Utama sahaja, atau Utama dan Kedua? Pendaftar asal? | Pegawai Utama dan Kedua aktif seagensi (selaras `updateProgress` sedia ada). Pemilik telah menyatakan bahawa pilihan Berfasa dibuat oleh Pegawai Utama atau Pegawai Kedua (L.3). |
+| I.11 | **Pegawai yang boleh mengemas kini:** Pegawai Utama sahaja, atau Utama dan Kedua? Pendaftar asal? | ✅ **Diputuskan 20/11/2026:** Pegawai Utama dan Pegawai Kedua yang **aktif** boleh mengemas kini kemajuan, termasuk pilihan Berfasa (L.3) |
 | I.12 | **Nama paparan Jenis Perolehan 4:** "Pembangunan Aplikasi / Sistem" (master) berbanding "Pembangunan Sistem / Aplikasi" (spesifikasi). Nama templat D? | ✅ **Diputuskan 20/11/2026:** "Pembangunan Sistem / Aplikasi" bagi Templat D **dan** Master Data (E.1) |
 | I.13 | **Bank Projek (v1):** cara data v1 diperoleh (eksport pangkalan data v1 / fail), padanan agensi, pegawai bertanggungjawab bagi projek v1 yang masih berjalan, dan kriteria projek "berjalan" berbanding "sejarah" | Diputuskan sebelum fasa Bank Projek. Tidak menyekat SP1–SP5. |
 
@@ -705,9 +706,18 @@ Bagi projek Tidak Berfasa, fasa tunggal mengandungi semua aktiviti templat (juml
 |---|---|
 | I.2, I.7, I.12 | ✅ Diputuskan (20/11/2026) |
 | Tanda siap (L.1), projek berfasa (L.3), data v1 (L.4) | ✅ Diputuskan (20/11/2026) |
-| I.1 | Terbuka. Diperlukan sebelum SP2. |
-| I.3, I.4, I.5, I.6, I.8, I.9, I.10, I.11 | Terbuka. Diperlukan mengikut kebergantungan dalam Bahagian J. |
+| I.1, I.3, I.9, I.11 | ✅ Diputuskan (20/11/2026). Lihat L.6. |
+| I.4, I.5, I.6, I.8, I.10 | Terbuka. Diperlukan mengikut kebergantungan dalam Bahagian J (SP3–SP5). |
 | I.13 | Terbuka. Diperlukan sebelum fasa Bank Projek. |
+
+### L.6 Keputusan sebelum SP2 (20/11/2026)
+
+| # | Keputusan | Kesan reka bentuk SP2 (cadangan) |
+|---|---|---|
+| I.1 | Projek dipantau selepas Lulus JTICT. Penanda **"Menunggu JPICT"** sehingga kelulusan JPICT diperoleh. Keputusan JPICT **pilihan**. | Kolum pilihan pada `projects`: `jpict_approved_at`, `jpict_reference`, `jpict_recorded_by`, direkod oleh Urus Setia. Penanda dipaparkan bagi projek ≥ RM500,000 yang belum mempunyai `jpict_approved_at`. Penanda tidak menyekat pemantauan. |
+| I.3 | Pemohon menetapkan tarikh mula dan tamat projek. Pindaan dibenarkan tanpa kelulusan Urus Setia, dengan **justifikasi wajib**. Setiap pindaan direkodkan dan **tidak menimpa** jadual terdahulu. | Penetapan pertama semasa Mulakan Pemantauan tidak memerlukan justifikasi. Pindaan selepas itu memerlukan justifikasi. Jadual sejarah baharu `project_schedule_changes` (append-only): tarikh lama dan baharu bagi projek atau aktiviti, justifikasi, pengguna dan masa. |
+| I.9 | **Pengurusan sahaja** boleh melihat maklumat projek (baca sahaja). | `ProjectPolicy::view`: pegawai agensi (sunting mengikut I.11), Urus Setia (pantau, baca sahaja), Pengurusan (baca sahaja). Superadmin ditolak. |
+| I.11 | Pegawai Utama dan Pegawai Kedua **aktif** boleh mengemas kini kemajuan. | `ProjectPolicy::update`: pegawai aktif dalam `application_officers` bagi permohonan projek. Rekod sejarah v1 (`HISTORICAL`) dan projek ditutup adalah baca sahaja. |
 
 ---
 

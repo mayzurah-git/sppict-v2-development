@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
         $this->call(MeetingMasterDataSeeder::class);
         $this->call(ApplicationMasterDataSeeder::class);
+        $this->call(ProgressTemplateSeeder::class); // SP1: memerlukan Jenis Perolehan
 
         // Data contoh pembangunan sahaja. UM7A: akaun demo tidak dicipta dalam production;
         // Superadmin awal diwujudkan melalui `php artisan sppict:create-superadmin`.

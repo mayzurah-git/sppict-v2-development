@@ -129,7 +129,7 @@ class ApplicationMasterDataIntegrationTest extends TestCase
 
         $application->refresh();
         $this->assertSame($this->masterId(ProcurementType::class, 'pembangunan_aplikasi'), $application->procurement_type_id);
-        $this->assertSame('Pembangunan Aplikasi', $application->procurement_type);
+        $this->assertSame('Pembangunan Sistem / Aplikasi', $application->procurement_type);
         $this->assertSame('Tender Terbuka (Dikemaskini)', $application->procurement_method);
 
         $detail = $application->details()->sole();

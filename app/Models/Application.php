@@ -367,6 +367,22 @@ class Application extends Model implements Auditable
         return $this->hasOne(Project::class);
     }
 
+    /**
+     * SP1: permohonan layak dipantau = keputusan JTICT terkini ialah Lulus (audit SP0 D.1–D.2).
+     * Sumber: application_decisions (bukan status CLOSED, yang juga digunakan oleh Tidak Lulus dan
+     * Kaji Semula, dan bukan lajur warisan jtict_decision). Permohonan dipadam dikecualikan oleh SoftDeletes.
+     */
+    public function scopeApprovedByJtict(Builder $query): Builder
+    {
+        return $query->whereHas('latestJtictDecision', fn (Builder $decision) => $decision
+            ->where('decision', ApplicationDecisionEnum::Approved->value));
+    }
+
+    public function isApprovedByJtict(): bool
+    {
+        return $this->latestJtictDecision?->decision === ApplicationDecisionEnum::Approved;
+    }
+
     public function details()
     {
         return $this->hasMany(ApplicationDetail::class);
