@@ -1,0 +1,46 @@
+<?php
+
+namespace App\Livewire\Admin;
+
+use Livewire\Component;
+use Livewire\WithPagination;
+use OwenIt\Auditing\Models\Audit;
+
+class AuditLog extends Component
+{
+    use WithPagination;
+
+    public string $search = '';
+
+    /**
+     * UM7: `boot()` dijalankan pada setiap permintaan (paparan awal & setiap `/livewire/update`),
+     * jadi data audit tidak boleh dibaca semula tanpa peranan Superadmin yang aktif.
+     */
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->hasRole('superadmin') && auth()->user()->canUseSystem(), 403);
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function render()
+    {
+        $audits = Audit::query()
+            ->with('user')
+            ->when($this->search, function ($query): void {
+                $query->where(function ($query): void {
+                    $query->where('event', 'like', "%{$this->search}%")
+                        ->orWhere('auditable_type', 'like', "%{$this->search}%")
+                        ->orWhere('url', 'like', "%{$this->search}%");
+                });
+            })
+            ->latest()
+            ->paginate(20);
+
+        return view('livewire.admin.audit-log', compact('audits'))
+            ->layout('layouts.app');
+    }
+}

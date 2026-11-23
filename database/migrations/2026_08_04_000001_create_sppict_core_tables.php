@@ -17,7 +17,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('code')->unique(); // Contoh: BTM, SUK, JKR
             $table->string('name'); // Nama Penuh Agensi / Jabatan
-            $table->string('category')->default('Agensi Negeri'); // Agensi Negeri / PBT / Badan Berkanun
+            $table->string('category')->default('SUK'); // SUK / PBT / PDT / Jabatan Negeri
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();

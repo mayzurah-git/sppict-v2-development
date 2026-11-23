@@ -135,9 +135,9 @@ Menggunakan perpustakaan `spatie/laravel-permission`, sistem dibahagikan kepada 
 
 ### 7.3 Modul Permohonan Projek Berfasa & Dokumen
 * **Pendaftaran Permohonan Baru Berfasa:**
-  * Fasa 1: Maklumat Am & Kategori Projek ICT
+  * Fasa 1: Maklumat Am & Kategori Permohonan (Pembangunan Sistem / Aplikasi, Perolehan Perkakasan / Komputer, Rangkaian & Keselamatan Siber, Penyelenggaraan, Sewaan dan Langganan, Kajian/Khidmat Perunding ICT)
   * Fasa 2: Jenis & Kaedah Perolehan, Anggaran Kos Projek
-  * Fasa 3: Perincian Projek, Justifikasi & Implikasi
+  * Fasa 3: Perincian Projek (mengikut Kategori Projek), Justifikasi & Implikasi
   * Fasa 4: Muat Naik Dokumen Sokongan
 * **Ketetapan Muat Naik Dokumen:**
   * **Slaid Pembentangan (JTICT / JPICT):** WAJIB dalam format `.pdf`.
@@ -175,7 +175,7 @@ Menggunakan `barryvdh/laravel-dompdf` (PDF) dan `maatwebsite/excel` (Excel):
 1. **Laporan Permohonan Projek Mengikut Tahun:** Carian dan penjanaan senarai permohonan bagi tahun tertentu.
 2. **Laporan Keseluruhan Amaun Projek Mengikut Kod Hasil:** Analisis pecahan kos mengikut Jenis Kod Hasil bagi setiap tahun.
 3. **Laporan Bilangan Projek & Amaun Mengikut Siri Mesyuarat:** Statistik permohonan mengikut siri Mesyuarat JTICTNS / JPICTNS.
-4. **Laporan Bilangan & Jumlah Kos Mengikut Kategori Projek ICT:** Pecahan kos berdasarkan kategori (cth: Hardware, Software, Network, System Development, Maintenance).
+4. **Laporan Bilangan & Jumlah Kos Mengikut Kategori Projek ICT:** Pecahan kos berdasarkan Kategori Projek di Fasa 3 (cth: Projek Baharu, Peningkatan Sistem, Penyelenggaraan).
 5. **Cetakan Sijil Kelulusan:** Penjanaan Sijil Kelulusan JTICTNS/JPICTNS secara automatik untuk muat turun pemohon.
 
 ---

@@ -39,6 +39,16 @@ class LoginForm extends Form
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        // Akaun Self Register yang belum diluluskan (atau ditolak) tidak boleh log masuk.
+        $user = Auth::user();
+        if (! $user->isActive()) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'form.email' => $user->status?->inactiveMessage() ?? 'Akaun anda tidak aktif.',
+            ]);
+        }
     }
 
     /**

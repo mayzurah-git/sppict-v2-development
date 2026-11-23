@@ -1,11 +1,15 @@
 <?php
 
+use App\Livewire\Concerns\RateLimitsActions;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 
 new #[Layout('layouts.guest')] class extends Component
 {
+    use RateLimitsActions;
+
     public string $email = '';
 
     /**
@@ -13,32 +17,29 @@ new #[Layout('layouts.guest')] class extends Component
      */
     public function sendPasswordResetLink(): void
     {
+        $this->email = Str::lower(trim($this->email));
+
         $this->validate([
             'email' => ['required', 'string', 'email'],
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $this->only('email')
-        );
+        // UM7: had kadar berasaskan IP (10 / 15 minit) dan e-mel dinormalisasi (3 / 15 minit).
+        $this->enforceRateLimit($this->rateLimitKey('password-reset-request:ip', (string) request()->ip()), 10, 900, 'email');
+        $this->enforceRateLimit($this->rateLimitKey('password-reset-request:email', $this->email), 3, 900, 'email');
 
-        if ($status != Password::RESET_LINK_SENT) {
-            $this->addError('email', __($status));
+        // Broker Laravel turut mengehadkan 1 pautan / 60 saat bagi setiap akaun (`auth.passwords.users.throttle`).
+        Password::sendResetLink($this->only('email'));
 
-            return;
-        }
-
+        // UM7: mesej seragam supaya tidak mendedahkan sama ada e-mel berdaftar atau sedang dihadkan.
         $this->reset('email');
 
-        session()->flash('status', __($status));
+        session()->flash('status', 'Jika e-mel tersebut berdaftar, pautan set semula kata laluan akan dihantar ke e-mel berkenaan.');
     }
 }; ?>
 
 <div>
     <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
+        {{ __('Lupa kata laluan? Masukkan e-mel rasmi anda dan pautan untuk menetapkan semula kata laluan akan dihantar ke e-mel tersebut.') }}
     </div>
 
     <!-- Session Status -->
@@ -47,14 +48,14 @@ new #[Layout('layouts.guest')] class extends Component
     <form wire:submit="sendPasswordResetLink">
         <!-- Email Address -->
         <div>
-            <x-input-label for="email" :value="__('Email')" />
+            <x-input-label for="email" :value="__('E-mel Rasmi')" />
             <x-text-input wire:model="email" id="email" class="block mt-1 w-full" type="email" name="email" required autofocus />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
         <div class="flex items-center justify-end mt-4">
             <x-primary-button>
-                {{ __('Email Password Reset Link') }}
+                {{ __('Hantar Pautan Set Semula Kata Laluan') }}
             </x-primary-button>
         </div>
     </form>

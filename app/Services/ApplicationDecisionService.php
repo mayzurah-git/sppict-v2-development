@@ -1,0 +1,352 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\ApplicationDecision as Decision;
+use App\Enums\ApplicationStatus;
+use App\Enums\DecisionStage;
+use App\Models\Application;
+use App\Models\ApplicationDecision;
+use App\Models\Meeting;
+use App\Models\User;
+use App\Notifications\ApplicationDecisionRecorded;
+use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * PP4: rekod keputusan Pra JTICT dan Mesyuarat JTICT oleh Urus Setia.
+ *
+ * Dipanggil oleh ViewApplication (PP4.2: Pra JTICT; PP4.3A: JTICT).
+ * PP4.3D: e-mel keputusan dihantar selepas transaksi berjaya (lihat notifyDecision()).
+ * Tiada rekod projek dicipta, dan lajur warisan jtict_decision tidak disentuh.
+ */
+class ApplicationDecisionService
+{
+    public const REMARKS_MIN = 10;
+
+    public const REMARKS_MAX = 5000;
+
+    /**
+     * Rekod satu keputusan. Rekod keputusan & status permohonan dikemas kini dalam satu transaksi
+     * (rekod permohonan dikunci; kebenaran, status dan tarikh disemak semula di dalam transaksi),
+     * jadi klik berganda / keputusan serentak tidak menghasilkan rekod pendua.
+     *
+     * Peringkat, status asal & sasaran dan perekod ditentukan oleh pelayan; $stage hanya menyatakan
+     * peringkat yang dijangka oleh pemanggil dan mesti sepadan dengan keputusan.
+     *
+     * @param  int|null  $meetingId  pilihan; jika diberi, mesti sama dengan mesyuarat JTICT permohonan
+     *
+     * @throws AuthorizationException  pengguna tidak dibenarkan / permohonan tidak berada pada peringkat ini
+     * @throws ValidationException  keputusan, ulasan, tarikh atau mesyuarat tidak sah
+     *                              (kunci: decision, remarks, decisionDate, meetingId)
+     */
+    public function decide(
+        Application $application,
+        DecisionStage $stage,
+        Decision|string|null $decision,
+        ?string $remarks,
+        CarbonInterface|string|null $decisionDate,
+        User $user,
+        ?int $meetingId = null,
+    ): ApplicationDecision {
+        $decision = $this->resolveDecision($stage, $decision);
+        $remarks = $this->normaliseRemarks($remarks);
+        $decisionDate = $decisionDate instanceof CarbonInterface ? $decisionDate->toDateString() : $decisionDate;
+
+        Validator::make(['remarks' => $remarks, 'decisionDate' => $decisionDate], [
+            'remarks' => [
+                $decision->requiresRemarks() ? 'required' : 'nullable',
+                'string',
+                'min:' . self::REMARKS_MIN,
+                'max:' . self::REMARKS_MAX,
+            ],
+            'decisionDate' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ], [
+            'remarks.required' => "Ulasan wajib diisi bagi keputusan {$decision->label()} ({$stage->label()}).",
+            'remarks.min' => 'Ulasan hendaklah sekurang-kurangnya ' . self::REMARKS_MIN . ' aksara.',
+            'remarks.max' => 'Ulasan tidak boleh melebihi ' . self::REMARKS_MAX . ' aksara.',
+            'decisionDate.required' => 'Tarikh keputusan wajib diisi.',
+            'decisionDate.date_format' => 'Tarikh keputusan tidak sah.',
+            'decisionDate.before_or_equal' => 'Tarikh keputusan tidak boleh melebihi tarikh semasa.',
+        ])->validate();
+
+        $record = DB::transaction(function () use ($application, $stage, $decision, $remarks, $decisionDate, $user, $meetingId) {
+            $locked = Application::withTrashed()->lockForUpdate()->findOrFail($application->id);
+            $actor = User::findOrFail($user->id); // peranan & status akaun terkini
+
+            // PP4.3A: permohonan yang telah dipadam tidak boleh diputuskan (penolakan kebenaran yang jelas, bukan 404).
+            if ($locked->trashed()) {
+                throw new AuthorizationException('Permohonan ini telah dipadam dan tidak boleh diputuskan.');
+            }
+
+            $ability = $stage === DecisionStage::PreJtict ? 'decidePreJtict' : 'decideJtict';
+            $target = $decision->targetStatus();
+
+            // PP4.3A: bagi JTICT, halangan mesyuarat (belum berlangsung / tidak selaras) dipulangkan dengan sebab
+            // yang jelas apabila pengguna & permohonan selainnya layak; polisi decideJtict() menyemak syarat yang sama.
+            if ($stage === DecisionStage::Jtict && ($reason = $this->jtictMeetingReason($locked, $actor))) {
+                throw ValidationException::withMessages(['meetingId' => $reason]);
+            }
+
+            if ($actor->cannot($ability, $locked)
+                || $locked->statusEnum() !== $stage->requiredStatus()
+                || ! $locked->statusEnum()->canTransitionTo($target)) {
+                throw new AuthorizationException("Keputusan {$stage->label()} tidak boleh direkodkan bagi permohonan ini pada status semasa.");
+            }
+
+            $meeting = $stage === DecisionStage::PreJtict
+                ? $this->validatePreJtict($locked, $decision, $decisionDate, $meetingId)
+                : $this->validateJtict($locked, $decisionDate, $meetingId);
+
+            $record = ApplicationDecision::create([
+                'application_id' => $locked->id,
+                'stage' => $decision->stage(),
+                'decision' => $decision,
+                'from_status' => $locked->status,
+                'to_status' => $target->value,
+                'remarks' => $remarks,
+                'decision_date' => $decisionDate,
+                'meeting_id' => $meeting?->id,
+                'decided_by' => $actor->id,
+            ]);
+
+            // Hanya status berubah; mesyuarat, ulasan semakan PP2 dan jtict_decision tidak disentuh.
+            $locked->status = $target->value;
+            $locked->save();
+
+            return $record;
+        });
+
+        $application->refresh();
+
+        Log::info("Keputusan {$stage->label()} direkodkan: {$application->reference_number} {$decision->value} oleh ID Pengguna {$user->id}");
+
+        // PP4.3D: hanya selepas transaksi berjaya; kegagalan e-mel tidak menjejaskan keputusan yang telah disimpan.
+        $this->notifyDecision($application, $record);
+
+        return $record;
+    }
+
+    /**
+     * PP4.3D: makluman e-mel keputusan kepada Pendaftar Permohonan dan Pegawai Utama aktif.
+     * Dipanggil sekali bagi setiap rekod keputusan baharu (rekod tidak boleh diubah; keputusan kedua
+     * bagi peringkat yang sama ditolak di dalam transaksi). Semua ralat dilog dan tidak dilontar semula.
+     */
+    private function notifyDecision(Application $application, ApplicationDecision $record): void
+    {
+        $label = "{$record->decision->label()} ({$application->reference_number})";
+
+        try {
+            $recipients = $this->decisionRecipients($application);
+        } catch (\Throwable $e) {
+            Log::error("Notifikasi keputusan {$label}: penerima tidak dapat ditentukan: " . ApplicationDecisionRecorded::safeError($e));
+
+            return;
+        }
+
+        if ($recipients->isEmpty()) {
+            Log::warning("Notifikasi keputusan {$label} tidak dihantar: tiada penerima dengan alamat e-mel sah.");
+
+            return;
+        }
+
+        $notification = new ApplicationDecisionRecorded($record);
+
+        foreach ($recipients as $role => $notifiable) {
+            try {
+                Notification::send($notifiable, $notification);
+                Log::info("Notifikasi keputusan {$label} diserahkan untuk penghantaran kepada {$role}.");
+            } catch (\Throwable $e) {
+                Log::error("Notifikasi keputusan {$label} gagal diserahkan kepada {$role}: " . ApplicationDecisionRecorded::safeError($e));
+            }
+        }
+    }
+
+    /**
+     * PP4.3D: penerima keputusan (keputusan pemilik sistem):
+     *  - Pendaftar Permohonan (akaun pengguna `applicant_id`; akaun dipadam = tiada penerima);
+     *  - Pegawai Utama aktif: lantikan belum tamat dan, jika dipautkan kepada akaun, akaun berstatus aktif
+     *    dan masih dalam agensi permohonan. Pegawai tanpa akaun (snapshot) menggunakan e-mel snapshot.
+     * Pegawai Kedua dan Urus Setia perekod tidak ditambah. Alamat tiada / tidak sah dilangkau dan dilog;
+     * alamat yang sama hanya menerima satu e-mel.
+     *
+     * @return Collection<string, object>
+     */
+    public function decisionRecipients(Application $application): Collection
+    {
+        $application->loadMissing(['applicant', 'primaryOfficer.user']);
+        $reference = $application->reference_number;
+        $candidates = [];
+
+        if ($application->applicant) {
+            $candidates['Pendaftar Permohonan'] = [$application->applicant, $application->applicant->email];
+        } else {
+            Log::warning("Notifikasi keputusan ({$reference}): akaun Pendaftar Permohonan tiada atau telah dipadam.");
+        }
+
+        $officer = $application->primaryOfficer;
+
+        if (! $officer) {
+            Log::warning("Notifikasi keputusan ({$reference}): tiada Pegawai Utama aktif.");
+        } elseif ($officer->user_id === null) {
+            $candidates['Pegawai Utama'] = [null, $officer->email];
+        } elseif (! $officer->user || ! $officer->user->isActive() || (int) $officer->user->agency_id !== (int) $application->agency_id) {
+            Log::warning("Notifikasi keputusan ({$reference}) tidak dihantar kepada Pegawai Utama: akaun tidak aktif, telah dipadam atau tidak lagi dalam agensi permohonan.");
+        } else {
+            $candidates['Pegawai Utama'] = [$officer->user, $officer->user->email];
+        }
+
+        $recipients = collect();
+        $seen = [];
+
+        foreach ($candidates as $role => [$user, $email]) {
+            $email = trim((string) $email);
+
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Log::warning("Notifikasi keputusan ({$reference}) tidak dihantar kepada {$role}: alamat e-mel tiada atau tidak sah.");
+
+                continue;
+            }
+
+            $key = strtolower($email);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $recipients->put($role, $user ?? Notification::route('mail', $email));
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function resolveDecision(DecisionStage $stage, Decision|string|null $decision): Decision
+    {
+        $decision = is_string($decision) ? Decision::tryFrom($decision) : $decision;
+
+        if (! $decision || $decision->stage() !== $stage) {
+            throw ValidationException::withMessages([
+                'decision' => "Keputusan tidak sah bagi peringkat {$stage->label()}.",
+            ]);
+        }
+
+        return $decision;
+    }
+
+    /**
+     * Pra JTICT: tarikh keputusan tidak lebih awal daripada tarikh terakhir PP2 mengesahkan Lengkap.
+     * Mesyuarat yang direkodkan = Mesyuarat JTICT permohonan pada masa keputusan (jika ada; tidak diubah).
+     * PP42B-01: "Diterima" hanya bagi Mesyuarat JTICT yang sah (Aktif, belum berlalu); Ditolak dengan
+     * Pindaan / Ditolak tidak terikat syarat mesyuarat.
+     *
+     * @throws ValidationException
+     */
+    private function validatePreJtict(Application $application, Decision $decision, string $decisionDate, ?int $meetingId): ?Meeting
+    {
+        $completedAt = $application->reviews()
+            ->where('to_status', ApplicationStatus::Complete->value)
+            ->latest('id')
+            ->value('created_at');
+
+        if (! $completedAt) {
+            throw ValidationException::withMessages([
+                'decisionDate' => 'Tiada rekod semakan PP2 yang mengesahkan permohonan ini Lengkap.',
+            ]);
+        }
+
+        $completedDate = Carbon::parse($completedAt);
+
+        if ($decisionDate < $completedDate->toDateString()) {
+            throw ValidationException::withMessages([
+                'decisionDate' => 'Tarikh keputusan Pra JTICT tidak boleh lebih awal daripada tarikh permohonan disahkan Lengkap (' . $completedDate->format('d/m/Y') . ').',
+            ]);
+        }
+
+        if ($meetingId !== null && $meetingId !== $application->jtict_meeting_id) {
+            throw ValidationException::withMessages([
+                'meetingId' => 'Mesyuarat tidak sepadan dengan Mesyuarat JTICT permohonan.',
+            ]);
+        }
+
+        if ($decision === Decision::Accepted && ($reason = $application->preJtictAcceptanceBlocker())) {
+            throw ValidationException::withMessages([
+                'meetingId' => "{$reason} Keputusan Diterima tidak dibenarkan; gunakan Ditolak dengan Pindaan (pemohon menghantar semula ke Mesyuarat JTICT yang dibuka) atau Ditolak.",
+            ]);
+        }
+
+        return $application->jtict_meeting_id ? Meeting::withTrashed()->find($application->jtict_meeting_id) : null;
+    }
+
+    /**
+     * PP4.3A: sebab mesyuarat menghalang keputusan JTICT, hanya apabila pengguna berperanan layak dan
+     * permohonan berada pada peringkat JTICT (Dalam Proses JTICT, Pra JTICT terkini Diterima, tiada keputusan
+     * JTICT). Selain itu null: penolakan kebenaran umum dibuat oleh polisi.
+     */
+    private function jtictMeetingReason(Application $application, User $actor): ?string
+    {
+        $eligible = $actor->can('viewJtictQueue', Application::class)
+            && $application->statusEnum() === ApplicationStatus::InJtict
+            && $application->latestPreJtictDecision?->decision === Decision::Accepted
+            && ! $application->decisions()->where('stage', DecisionStage::Jtict->value)->exists();
+
+        return $eligible ? $application->jtictMeetingBlocker() : null;
+    }
+
+    /**
+     * JTICT: Mesyuarat JTICT permohonan mesti wujud (tidak dipadam), jenis JTICT, telah berlangsung dan
+     * tidak lebih awal daripada tarikh Pra JTICT Diterima (PP4.3A; `is_active` tidak disyaratkan);
+     * tarikh keputusan tidak lebih awal daripada tarikh mesyuarat.
+     *
+     * @throws ValidationException
+     */
+    private function validateJtict(Application $application, string $decisionDate, ?int $meetingId): Meeting
+    {
+        $meeting = $application->jtict_meeting_id
+            ? Meeting::jtict()->find($application->jtict_meeting_id)
+            : null;
+
+        if (! $meeting) {
+            throw ValidationException::withMessages([
+                'meetingId' => 'Mesyuarat JTICT permohonan ini tidak wujud atau telah dipadam.',
+            ]);
+        }
+
+        if ($meetingId !== null && $meetingId !== $meeting->id) {
+            throw ValidationException::withMessages([
+                'meetingId' => 'Mesyuarat tidak sepadan dengan Mesyuarat JTICT permohonan.',
+            ]);
+        }
+
+        if ($reason = $application->jtictMeetingBlocker()) {
+            throw ValidationException::withMessages(['meetingId' => $reason]);
+        }
+
+        if ($decisionDate < $meeting->meeting_date->toDateString()) {
+            throw ValidationException::withMessages([
+                'decisionDate' => 'Tarikh keputusan JTICT tidak boleh lebih awal daripada tarikh mesyuarat (' . $meeting->meeting_date->format('d/m/Y') . ').',
+            ]);
+        }
+
+        return $meeting;
+    }
+
+    /**
+     * Ulasan disimpan sebagai teks biasa (tag HTML dibuang; dipaparkan ter-escape).
+     */
+    private function normaliseRemarks(?string $remarks): ?string
+    {
+        $remarks = trim(strip_tags((string) $remarks));
+
+        return $remarks === '' ? null : $remarks;
+    }
+}

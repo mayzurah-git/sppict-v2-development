@@ -21,6 +21,7 @@ class ApplicationDetail extends Model implements Auditable
         'uuid',
         'application_id',
         'item_category',
+        'project_category_id',
         'technical_specifications',
         'unit_quantity',
         'unit_cost',
@@ -36,5 +37,10 @@ class ApplicationDetail extends Model implements Auditable
     public function application()
     {
         return $this->belongsTo(Application::class);
+    }
+
+    public function projectCategory()
+    {
+        return $this->belongsTo(ProjectCategory::class)->withTrashed();
     }
 }
