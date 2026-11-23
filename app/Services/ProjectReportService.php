@@ -22,7 +22,7 @@ use Illuminate\Validation\ValidationException;
  *   (mesyuarat tidak dipadam), disalin semasa laporan dicipta. Laporan lewat dibenarkan dengan tanda "Lewat".
  * - Semasa dihantar: snapshot aktiviti pada tarikh penilaian (hari terakhir bulan, atau hari ini jika lebih
  *   awal), kemudian laporan dikunci.
- * - Peratus sebenar / dirancang / varians laporan diisi oleh pengiraan SP4 (daripada snapshot).
+ * - Peratus sebenar / dirancang / varians laporan dikira daripada snapshot semasa dihantar (SP4, ProgressCalculator).
  */
 class ProjectReportService
 {
@@ -40,7 +40,7 @@ class ProjectReportService
             $locked = Project::lockForUpdate()->findOrFail($project->id);
             $actor = User::findOrFail($user->id);
 
-            if ($actor->cannot('manage', $locked)) {
+            if ($actor->cannot('manageReports', $locked)) {
                 throw new AuthorizationException('Anda tidak dibenarkan mencipta laporan bagi projek ini.');
             }
 
@@ -144,10 +144,19 @@ class ProjectReportService
                 ->with('phase:id,phase_number')
                 ->get();
 
+            $snapshotPhases = [];
+
             foreach ($activities as $activity) {
                 $completed = $activity->is_completed
                     && $activity->actual_completion_date !== null
                     && $activity->actual_completion_date->lte($evaluationDate);
+
+                $snapshotPhases[$activity->phase->phase_number][] = [
+                    'weight' => $activity->weight,
+                    'target_date' => $activity->target_date,
+                    'is_completed' => $completed,
+                    'actual_completion_date' => $completed ? $activity->actual_completion_date : null,
+                ];
 
                 $locked->activitySnapshots()->create([
                     'project_progress_activity_id' => $activity->id,
@@ -164,7 +173,14 @@ class ProjectReportService
 
             $officerId = $project->application?->officers()->active()->where('user_id', $user->id)->value('id');
 
+            // SP4: peratus laporan daripada snapshot (pengiraan sama dengan skrin projek).
+            ksort($snapshotPhases);
+            $result = app(ProgressCalculator::class)->compute($snapshotPhases, $evaluationDate);
+
             $locked->update($text + [
+                'actual_progress_percent' => $result->actual,
+                'planned_progress_percent' => $result->planned,
+                'variance_percent' => $result->variance(),
                 'status' => ProgressReportStatus::Submitted,
                 'evaluation_date' => $evaluationDate,
                 'due_date' => $dueDate,
@@ -200,7 +216,7 @@ class ProjectReportService
         $project = Project::findOrFail($locked->project_id);
         $actor = User::findOrFail($user->id);
 
-        if ($actor->cannot('manage', $project)) {
+        if ($actor->cannot('manageReports', $project)) {
             throw new AuthorizationException('Anda tidak dibenarkan mengemas kini laporan projek ini.');
         }
 

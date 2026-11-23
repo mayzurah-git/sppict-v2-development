@@ -5,7 +5,10 @@ namespace App\Livewire\Projects;
 use App\Models\Project;
 use App\Models\ProjectProgressActivity;
 use App\Models\ProjectProgressAttachment;
+use App\Services\ProgressCalculator;
+use App\Services\ProjectClosureService;
 use App\Services\ProjectMonitoringService;
+use App\Support\Progress\ProgressResult;
 use App\Services\ProjectProgressService;
 use App\Services\ProjectReportService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -49,6 +52,23 @@ class ShowProject extends Component
     // SP3: Cipta laporan bulanan ("tahun-bulan")
     public string $reportPeriod = '';
 
+    // SP4: Penutupan projek (request | withdraw | approve | reject | terminate)
+    public bool $showClosureModal = false;
+
+    #[Locked]
+    public string $closureAction = '';
+
+    public string $closureRemarks = '';
+
+    /** Tindakan penutupan => [ability policy, kaedah service, mesej berjaya]. */
+    private const CLOSURE_ACTIONS = [
+        'request' => ['requestClosure', 'request', 'Permohonan penutupan telah dihantar kepada Urus Setia.'],
+        'withdraw' => ['withdrawClosure', 'withdraw', 'Permohonan penutupan telah ditarik balik.'],
+        'approve' => ['decideClosure', 'approve', 'Penutupan projek telah disahkan. Projek kini Selesai.'],
+        'reject' => ['decideClosure', 'reject', 'Permohonan penutupan telah ditolak. Projek kembali Dalam Pelaksanaan.'],
+        'terminate' => ['terminate', 'terminate', 'Projek telah ditutup tanpa siap.'],
+    ];
+
     // Pinda Jadual
     public bool $showScheduleModal = false;
 
@@ -88,7 +108,8 @@ class ShowProject extends Component
             'application.secondaryOfficer',
             'application.latestJtictDecision',
             'agency:id,code,name',
-            'progressTemplate',
+            'progressTemplate.procurementType',
+            'closer:id,name',
             'phases.activities',
             'starter:id,name',
             'jpictRecorder:id,name',
@@ -108,6 +129,13 @@ class ShowProject extends Component
     public function unlockHistory(): Collection
     {
         return $this->project->structureUnlocks()->with('unlocker:id,name')->get();
+    }
+
+    /** SP4: kemajuan pada hari ini, dikira secara langsung (bukan nilai cache). */
+    #[Computed]
+    public function progress(): ProgressResult
+    {
+        return app(ProgressCalculator::class)->forProject($this->project, today());
     }
 
     /** SP3: dokumen aktiviti, dikumpulkan mengikut aktiviti. */
@@ -218,11 +246,55 @@ class ShowProject extends Component
         }
     }
 
+    // --- SP4: PENUTUPAN PROJEK ---
+
+    #[Computed]
+    public function closureHistory(): Collection
+    {
+        return $this->project->closureEvents()->with('actor:id,name')->get();
+    }
+
+    #[Computed]
+    public function closureBlocker(): ?string
+    {
+        return app(ProjectClosureService::class)->closureBlocker($this->project);
+    }
+
+    #[Computed]
+    public function missingReportCount(): int
+    {
+        return app(ProjectClosureService::class)->missingReportCount($this->project);
+    }
+
+    public function openClosureModal(string $action): void
+    {
+        $definition = self::CLOSURE_ACTIONS[$action] ?? abort(404);
+        $this->authorize($definition[0], $this->project);
+
+        $this->resetErrorBag();
+        $this->closureAction = $action;
+        $this->closureRemarks = '';
+        $this->showClosureModal = true;
+    }
+
+    public function submitClosure(ProjectClosureService $service): void
+    {
+        [$ability, $method, $message] = self::CLOSURE_ACTIONS[$this->closureAction] ?? abort(404);
+        $this->authorize($ability, $this->project);
+        $this->resetErrorBag();
+
+        if ($this->guard(fn () => $service->{$method}($this->project, Auth::user(), $this->closureRemarks))) {
+            $this->showClosureModal = false;
+            $this->refreshProject();
+            session()->flash('message', $message);
+        }
+    }
+
     // --- SP3: LAPORAN BULANAN ---
 
     public function createReport(ProjectReportService $service)
     {
-        $this->authorize('manage', $this->project);
+        $this->authorize('manageReports', $this->project);
         $this->resetErrorBag();
 
         if (! preg_match('/^(\d{4})-(\d{1,2})$/', $this->reportPeriod, $match)) {
@@ -344,7 +416,7 @@ class ShowProject extends Component
 
     public function closeModals(): void
     {
-        $this->showScheduleModal = $this->showUnlockModal = $this->showJpictModal = $this->showActivityModal = false;
+        $this->showScheduleModal = $this->showUnlockModal = $this->showJpictModal = $this->showActivityModal = $this->showClosureModal = false;
         $this->upload = null;
         $this->resetErrorBag();
     }
@@ -378,7 +450,7 @@ class ShowProject extends Component
 
     private function refreshProject(): void
     {
-        unset($this->project, $this->scheduleHistory, $this->unlockHistory, $this->activityAttachments,
+        unset($this->project, $this->progress, $this->closureHistory, $this->closureBlocker, $this->missingReportCount, $this->scheduleHistory, $this->unlockHistory, $this->activityAttachments,
             $this->progressHistory, $this->reports, $this->availablePeriods, $this->selectedActivity);
     }
 }

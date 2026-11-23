@@ -3,6 +3,7 @@
     $application = $project->application;
     $user = auth()->user();
     $canManage = $user->can('manage', $project);
+    $canManageReports = $user->can('manageReports', $project);
     $canEditStructure = $user->can('updateStructure', $project);
     $canUnlock = $user->can('unlockStructure', $project);
     $canRecordJpict = $user->can('recordJpict', $project);
@@ -43,7 +44,7 @@
         <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl">{{ session('error') }}</div>
     @endif
 
-    @if (! $canManage && ! $project->isReadOnly())
+    @if (! $canManageReports && ! $project->isReadOnly())
         <div class="p-3 bg-slate-50 border border-slate-200 text-slate-600 text-xs rounded-xl">Paparan baca sahaja. Jadual dan kemajuan dikemas kini oleh Pegawai Utama / Pegawai Kedua projek yang aktif.</div>
     @endif
 
@@ -94,6 +95,115 @@
         @endif
     </section>
 
+    {{-- SP4: Kemajuan projek (dikira secara langsung pada hari ini) --}}
+    @php
+        $progress = $this->progress;
+    @endphp
+    <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4" aria-labelledby="tajuk-kemajuan">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <h3 id="tajuk-kemajuan" class="text-sm font-bold text-slate-800">Kemajuan Projek</h3>
+            <p class="text-[11px] text-slate-500">Tarikh penilaian: {{ today()->format('d/m/Y') }}</p>
+        </div>
+        <dl class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="p-3 rounded-xl bg-slate-50">
+                <dt class="text-[11px] font-semibold text-slate-500">Kemajuan Sebenar</dt>
+                <dd class="text-2xl font-black text-slate-900 tabular-nums">{{ number_format($progress->actual, 2) }}%</dd>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50">
+                <dt class="text-[11px] font-semibold text-slate-500">Kemajuan Dirancang</dt>
+                <dd class="text-2xl font-black text-slate-900 tabular-nums">{{ $progress->planned === null ? '-' : number_format($progress->planned, 2) . '%' }}</dd>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50">
+                <dt class="text-[11px] font-semibold text-slate-500">Varians</dt>
+                <dd class="text-2xl font-black tabular-nums {{ ($progress->variance() ?? 0) < 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $progress->variance() === null ? '-' : sprintf('%+.2f', $progress->variance()) }}</dd>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50">
+                <dt class="text-[11px] font-semibold text-slate-500">Status Jadual</dt>
+                <dd class="mt-1">
+                    @if ($progress->status())
+                        <span class="inline-flex px-2.5 py-1 rounded-md text-xs font-bold ring-1 {{ \App\Enums\ScheduleStatus::indicatorClasses($progress->indicator()) }}">{{ $progress->status()->label() }} · {{ \App\Enums\ScheduleStatus::indicatorLabel($progress->indicator()) }}</span>
+                    @else
+                        <span class="text-xs text-slate-500">Tiada data rancangan</span>
+                    @endif
+                </dd>
+            </div>
+        </dl>
+        @if ($project->is_phased)
+            <p class="text-[11px] text-slate-500">Kemajuan projek ialah purata sama rata kemajuan {{ count($progress->phases) }} fasa. Setiap fasa dikira 100% berdasarkan aktiviti yang dipilih.</p>
+        @endif
+        <p class="text-[11px] text-slate-500">Lampu: Hijau = tidak lewat; Kuning = lewat kurang daripada 20 mata peratus; Merah = lewat 20 mata peratus atau lebih.</p>
+        @if ($project->isMaintenance() && $progress->actual >= 100 && $project->status === \App\Enums\ProjectStatus::InProgress && $project->planned_end_date && today()->lt($project->planned_end_date))
+            <p class="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-900"><span class="font-bold">100% – Dalam Pelaksanaan Kontrak.</span> Projek Penyelenggaraan selesai pada tarikh tamat kontrak ({{ $project->planned_end_date->format('d/m/Y') }}).</p>
+        @endif
+    </section>
+
+    {{-- SP4: Penutupan projek (I.6) --}}
+    @php
+        $canRequestClosure = $user->can('requestClosure', $project);
+        $canWithdrawClosure = $user->can('withdrawClosure', $project);
+        $canDecideClosure = $user->can('decideClosure', $project);
+        $canTerminate = $user->can('terminate', $project);
+    @endphp
+    @if ($canRequestClosure || $canWithdrawClosure || $canDecideClosure || $canTerminate || in_array($project->status, [\App\Enums\ProjectStatus::PendingClosure, \App\Enums\ProjectStatus::Completed, \App\Enums\ProjectStatus::Closed], true))
+        <section class="bg-white p-6 rounded-2xl shadow-sm border {{ $project->status === \App\Enums\ProjectStatus::PendingClosure ? 'border-amber-200' : 'border-slate-100' }} space-y-3" aria-labelledby="tajuk-penutupan">
+            <div class="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                <div>
+                    <h3 id="tajuk-penutupan" class="text-sm font-bold text-slate-800">Penutupan Projek</h3>
+                    @switch($project->status)
+                        @case(\App\Enums\ProjectStatus::PendingClosure)
+                            <p class="text-xs text-amber-900 mt-1">Penutupan telah dimohon dan menunggu pengesahan Urus Setia. Tarikh siap projek: <span class="font-bold tabular-nums">{{ $project->actual_completion_date?->format('d/m/Y') ?? '-' }}</span>. Aktiviti tidak boleh dikemas kini sehingga keputusan dibuat.</p>
+                            @if ($canDecideClosure && $this->missingReportCount > 0)
+                                <p class="text-xs text-amber-900 mt-1">Perhatian: {{ $this->missingReportCount }} laporan kemajuan bulanan belum dihantar.</p>
+                            @endif
+                            @break
+                        @case(\App\Enums\ProjectStatus::Completed)
+                            <p class="text-xs text-emerald-800 mt-1">Projek <span class="font-bold">Selesai</span>. Tarikh siap: <span class="tabular-nums">{{ $project->actual_completion_date?->format('d/m/Y') ?? '-' }}</span>. Disahkan oleh {{ $project->closer?->name ?? '-' }} pada {{ $project->closed_at?->format('d/m/Y') }}. Rekod projek kini baca sahaja.</p>
+                            @break
+                        @case(\App\Enums\ProjectStatus::Closed)
+                            <p class="text-xs text-red-800 mt-1">Projek <span class="font-bold">Ditutup tanpa siap</span> oleh {{ $project->closer?->name ?? '-' }} pada {{ $project->closed_at?->format('d/m/Y') }}. Rekod projek kini baca sahaja.</p>
+                            @if ($project->closure_remarks)<p class="text-xs text-slate-700 mt-1 whitespace-pre-line">{{ $project->closure_remarks }}</p>@endif
+                            @break
+                        @default
+                            @if ($canRequestClosure)
+                                @if ($this->closureBlocker)
+                                    <p class="text-xs text-slate-600 mt-1">{{ $this->closureBlocker }}</p>
+                                @else
+                                    <p class="text-xs text-emerald-800 mt-1">Semua aktiviti telah siap. Penutupan projek boleh dimohon untuk pengesahan Urus Setia.</p>
+                                @endif
+                            @endif
+                    @endswitch
+                </div>
+                <div class="flex flex-wrap gap-2 shrink-0">
+                    @if ($canRequestClosure && ! $this->closureBlocker)
+                        <button type="button" wire:click="openClosureModal('request')" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition">Mohon Penutupan</button>
+                    @endif
+                    @if ($canWithdrawClosure)
+                        <button type="button" wire:click="openClosureModal('withdraw')" class="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg transition">Tarik Balik Permohonan</button>
+                    @endif
+                    @if ($canDecideClosure)
+                        <button type="button" wire:click="openClosureModal('approve')" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition">Sahkan Penutupan</button>
+                        <button type="button" wire:click="openClosureModal('reject')" class="px-3 py-1.5 bg-white border border-red-300 text-red-800 hover:bg-red-50 text-xs font-bold rounded-lg transition">Tolak</button>
+                    @endif
+                    @if ($canTerminate)
+                        <button type="button" wire:click="openClosureModal('terminate')" class="px-3 py-1.5 bg-white border border-red-300 text-red-800 hover:bg-red-50 text-xs font-bold rounded-lg transition">Tutup Projek (Tanpa Siap)</button>
+                    @endif
+                </div>
+            </div>
+
+            @if ($this->closureHistory->isNotEmpty())
+                <ul class="space-y-2 pt-2 border-t border-slate-100">
+                    @foreach ($this->closureHistory as $event)
+                        <li wire:key="penutupan-{{ $event->id }}" class="text-xs">
+                            <span class="font-bold {{ $event->event_type->tone() }}">{{ $event->event_type->label() }}</span>
+                            <span class="text-slate-500">· {{ $event->created_at?->format('d/m/Y h:i A') }} · {{ $event->actor?->name ?? '-' }}</span>
+                            @if ($event->remarks)<p class="text-slate-700 whitespace-pre-line">{{ $event->remarks }}</p>@endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
+    @endif
+
     {{-- Struktur & jadual --}}
     @foreach ($project->phases as $phase)
         <section wire:key="fasa-{{ $phase->id }}" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -103,6 +213,10 @@
                     Jumlah pemberat: <span class="font-bold tabular-nums">{{ number_format($phase->totalWeight(), 2) }}</span>
                     @if ($project->is_phased && abs($phase->totalWeight() - 100) > 0.001)
                         (dikira secara berkadar kepada 100% bagi fasa ini)
+                    @endif
+                    @if ($project->is_phased && ($phaseProgress = $progress->phases[$phase->phase_number] ?? null))
+                        · Sebenar <span class="font-bold tabular-nums">{{ number_format($phaseProgress->actual, 2) }}%</span>
+                        · Dirancang <span class="font-bold tabular-nums">{{ $phaseProgress->planned === null ? '-' : number_format($phaseProgress->planned, 2) . '%' }}</span>
                     @endif
                 </p>
             </div>
@@ -164,7 +278,7 @@
                 <h3 class="text-sm font-bold text-slate-800">Laporan Kemajuan Bulanan</h3>
                 <p class="text-[11px] text-slate-500 mt-0.5">Satu laporan bagi setiap bulan. Tarikh akhir mengikut Tarikh Status Kemaskini Kemajuan Projek mesyuarat. Laporan lewat masih diterima dan ditanda "Lewat".</p>
             </div>
-            @if ($canManage && count($this->availablePeriods) > 0)
+            @if ($canManageReports && count($this->availablePeriods) > 0)
                 <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
                     <div>
                         <label for="bulan-laporan" class="sr-only">Bulan laporan</label>
@@ -204,7 +318,7 @@
                             <td class="p-3 tabular-nums">{{ $report->due_date?->format('d/m/Y') ?? 'Belum ditetapkan' }}</td>
                             <td class="p-3 tabular-nums">{{ $report->submitted_at ? $report->submitted_at->format('d/m/Y') . ' · ' . ($report->submitter?->name ?? '-') : '-' }}</td>
                             <td class="p-3 text-right">
-                                <a href="{{ route('projects.reports.show', [$project->uuid, $report->uuid]) }}" class="text-[13px] font-bold text-sky-800 hover:underline">{{ $canManage && ! $report->isSubmitted() ? 'Kemas Kini' : 'Papar' }}</a>
+                                <a href="{{ route('projects.reports.show', [$project->uuid, $report->uuid]) }}" class="text-[13px] font-bold text-sky-800 hover:underline">{{ $canManageReports && ! $report->isSubmitted() ? 'Kemas Kini' : 'Papar' }}</a>
                             </td>
                         </tr>
                     @empty
@@ -243,7 +357,9 @@
     <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h3 class="text-sm font-bold text-slate-800">Sejarah Pindaan Jadual</h3>
         @forelse ($this->scheduleHistory as $batch => $changes)
-            @php($first = $changes->first())
+            @php
+                $first = $changes->first();
+            @endphp
             <div wire:key="pindaan-{{ $batch }}" class="p-3 rounded-xl border border-slate-100 bg-slate-50 text-xs space-y-2">
                 <p class="text-slate-500">{{ $first->created_at?->format('d/m/Y h:i A') }} · {{ $first->changer?->name ?? '-' }}</p>
                 <p class="text-slate-800"><span class="font-bold">Justifikasi:</span> <span class="whitespace-pre-line">{{ $first->justification }}</span></p>
@@ -325,7 +441,9 @@
 
     {{-- SP3 Modal: Kemas Kini Aktiviti --}}
     @if ($showActivityModal && ($selected = $this->selectedActivity))
-        @php($selectedDocuments = $this->activityAttachments->get($selected->id, collect()))
+        @php
+            $selectedDocuments = $this->activityAttachments->get($selected->id, collect());
+        @endphp
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="tajuk-aktiviti">
                 <div class="border-b pb-2">
@@ -405,6 +523,36 @@
                     @else
                         <button type="button" wire:click="completeActivity" wire:loading.attr="disabled" wire:target="completeActivity" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50">Tanda Siap</button>
                     @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- SP4 Modal: Penutupan --}}
+    @if ($showClosureModal)
+        @php
+            $closureTitles = [
+                'request' => ['Mohon Penutupan Projek', 'Permohonan akan dihantar kepada Urus Setia untuk pengesahan. Aktiviti tidak boleh dikemas kini semasa menunggu keputusan.', false, 'Hantar Permohonan', 'bg-emerald-700 hover:bg-emerald-800'],
+                'withdraw' => ['Tarik Balik Permohonan Penutupan', 'Projek akan kembali Dalam Pelaksanaan.', false, 'Tarik Balik', 'bg-slate-700 hover:bg-slate-800'],
+                'approve' => ['Sahkan Penutupan Projek', 'Projek akan menjadi Selesai dan baca sahaja. Tindakan ini tidak boleh dibatalkan.', false, 'Sahkan', 'bg-emerald-700 hover:bg-emerald-800'],
+                'reject' => ['Tolak Permohonan Penutupan', 'Projek akan kembali Dalam Pelaksanaan. Nyatakan sebab penolakan.', true, 'Tolak', 'bg-red-700 hover:bg-red-800'],
+                'terminate' => ['Tutup Projek Tanpa Siap', 'Gunakan bagi projek yang dihentikan atau dibatalkan. Projek akan menjadi Ditutup dan baca sahaja. Tindakan ini tidak boleh dibatalkan.', true, 'Tutup Projek', 'bg-red-700 hover:bg-red-800'],
+            ];
+            [$closureTitle, $closureHint, $closureRequired, $closureButton, $closureButtonClass] = $closureTitles[$closureAction] ?? $closureTitles['request'];
+        @endphp
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="tajuk-modal-penutupan">
+                <h3 id="tajuk-modal-penutupan" class="text-base font-bold text-slate-800 border-b pb-2">{{ $closureTitle }}</h3>
+                <p class="text-[11px] text-slate-500">{{ $closureHint }}</p>
+                @error('closure') <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl">{{ $message }}</div> @enderror
+                <div>
+                    <label for="ulasan-penutupan" class="block text-xs font-bold text-slate-700">{{ $closureRequired ? 'Ulasan' : 'Catatan (pilihan)' }} @if ($closureRequired)<span class="text-red-600">*</span>@endif</label>
+                    <textarea id="ulasan-penutupan" wire:model="closureRemarks" rows="3" maxlength="2000" class="mt-1 {{ $inputClass }}"></textarea>
+                    @error('closureRemarks') <span class="text-red-600 text-xs block mt-1">{{ $message }}</span> @enderror
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" wire:click="closeModals" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">Batal</button>
+                    <button type="button" wire:click="submitClosure" wire:loading.attr="disabled" wire:target="submitClosure" class="px-4 py-2 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 {{ $closureButtonClass }}">{{ $closureButton }}</button>
                 </div>
             </div>
         </div>

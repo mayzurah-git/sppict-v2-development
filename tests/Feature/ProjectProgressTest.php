@@ -338,7 +338,8 @@ class ProjectProgressTest extends TestCase
             ApplicationOfficer::where('application_id', $project->application_id)->where('user_id', $this->secondary->id)->value('id'),
             $report->application_officer_id,
         );
-        $this->assertNull($report->actual_progress_percent); // dikira dalam SP4
+        // SP4: peratus daripada snapshot pada 31/03: siap Tender (5); dirancang seq 1–3 (5+10+5 = 20)
+        $this->assertSame(['5.00', '20.00', '-15.00'], [$report->actual_progress_percent, $report->planned_progress_percent, $report->variance_percent]);
 
         $this->assertCount(10, $report->activitySnapshots);
         $rows = $report->activitySnapshots->keyBy('sequence');
@@ -370,6 +371,54 @@ class ProjectProgressTest extends TestCase
         $report->refresh();
         $this->assertSame('2027-05-20', $report->evaluation_date->toDateString());
         $this->assertFalse($report->is_late);
+    }
+
+    // --- SP4: NILAI CACHE KEMAJUAN ---
+
+    public function test_progress_cache_is_refreshed_after_changes_and_daily(): void
+    {
+        $project = $this->project(); // hari ini 20/05/2027: sasaran 15/01–15/05 (seq 1–5 = 5+10+5+5+5) telah berlalu
+
+        $project->refresh();
+        $this->assertSame(['0.00', '30.00', '-30.00', 'RED'], [$project->actual_progress_percent, $project->planned_progress_percent, $project->variance_percent, $project->status_indicator]);
+        $this->assertSame('2027-05-20', $project->progress_evaluated_at->toDateString());
+
+        $tender = $this->activity($project, 1);
+        $this->progress()->uploadAttachment($project, $this->primary, $this->pdf(), activity: $tender);
+        $this->progress()->completeActivity($tender, $this->primary, '2027-01-20', null);
+        $this->progress()->completeActivity($this->activity($project, 9), $this->primary, '2027-05-01', null); // Latihan (5)
+
+        $project->refresh();
+        $this->assertSame(['10.00', '30.00', '-20.00', 'RED'], [$project->actual_progress_percent, $project->planned_progress_percent, $project->variance_percent, $project->status_indicator]);
+        $this->assertSame('10.00', $project->physical_progress_percent); // papan pemuka lama diselaraskan
+        $this->assertSame('10.00', $project->phases()->first()->actual_progress_percent);
+
+        $this->progress()->uncompleteActivity($this->activity($project, 9), $this->primary, 'Belum dilaksanakan.');
+        $this->assertSame('5.00', $project->fresh()->actual_progress_percent);
+
+        // Pindaan jadual: anjak Mesyuarat Kickoff (sasaran 15/04) ke 30/06 => dirancang 25
+        app(ProjectMonitoringService::class)->amendSchedule($project, $this->primary, [
+            'planned_start_date' => '2027-01-01',
+            'planned_end_date' => '2027-12-31',
+            'activities' => [$this->activity($project, 4)->uuid => '2027-06-30'],
+        ], 'Kickoff dianjakkan.');
+        $this->assertSame(['5.00', '25.00', '-20.00'], [$project->fresh()->actual_progress_percent, $project->fresh()->planned_progress_percent, $project->fresh()->variance_percent]);
+
+        // Masa berlalu tanpa kemas kini: arahan harian mengemas kini nilai dirancang sahaja
+        $this->travelTo(Carbon::parse('2027-07-01 01:00'));
+        $this->artisan('sppict:refresh-project-progress')->assertSuccessful();
+
+        $project->refresh();
+        $this->assertSame('5.00', $project->actual_progress_percent);
+        // Dirancang pada 01/07: seq 1–3 (20) + seq 4 (30/06, 5) + seq 5 (5) + seq 6 (15/06, 30) = 60
+        $this->assertSame('60.00', $project->planned_progress_percent);
+        $this->assertSame('-55.00', $project->variance_percent);
+        $this->assertSame('2027-07-01', $project->progress_evaluated_at->toDateString());
+
+        // Skrin Maklumat Projek mengira secara langsung dan memaparkan nilai yang sama
+        $this->actingAs($this->primary)->get(route('projects.show', $project->uuid))
+            ->assertOk()->assertSee('5.00%')->assertSee('60.00%')->assertSee('-55.00')->assertSee('Lewat · Merah');
+        $this->actingAs($this->primary)->get(route('projects.index'))->assertSee('Lewat (-55.00)');
     }
 
     // --- SKRIN (LIVEWIRE) ---

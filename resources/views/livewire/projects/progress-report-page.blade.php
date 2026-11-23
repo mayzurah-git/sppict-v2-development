@@ -97,7 +97,27 @@
         <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="p-4 border-b border-slate-100">
                 <h3 class="text-sm font-bold text-slate-800">Pencapaian Aktiviti pada {{ $report->evaluation_date?->format('d/m/Y') }}</h3>
-                <p class="text-[11px] text-slate-500 mt-0.5">Snapshot semasa laporan dihantar. Peratus kemajuan sebenar, dirancang dan varians akan dikira dalam fasa seterusnya (SP4).</p>
+                <p class="text-[11px] text-slate-500 mt-0.5">Snapshot semasa laporan dihantar. Nilai ini tidak berubah walaupun aktiviti dikemas kini kemudian.</p>
+                @if ($report->actual_progress_percent !== null)
+                    <dl class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs">
+                        <div><dt class="text-slate-500">Kemajuan Sebenar</dt><dd class="text-lg font-black tabular-nums">{{ number_format((float) $report->actual_progress_percent, 2) }}%</dd></div>
+                        <div><dt class="text-slate-500">Kemajuan Dirancang</dt><dd class="text-lg font-black tabular-nums">{{ $report->planned_progress_percent === null ? '-' : number_format((float) $report->planned_progress_percent, 2) . '%' }}</dd></div>
+                        <div>
+                            <dt class="text-slate-500">Varians</dt>
+                            <dd class="text-lg font-black tabular-nums">
+                                @if ($report->variance_percent !== null)
+                                    @php
+                                        $variance = (float) $report->variance_percent;
+                                    @endphp
+                                    {{ sprintf('%+.2f', $variance) }}
+                                    <span class="ml-1 align-middle inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold ring-1 {{ \App\Enums\ScheduleStatus::indicatorClasses(\App\Enums\ScheduleStatus::indicatorFor($variance)) }}">{{ \App\Enums\ScheduleStatus::fromVariance($variance)->label() }}</span>
+                                @else
+                                    -
+                                @endif
+                            </dd>
+                        </div>
+                    </dl>
+                @endif
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[720px] text-left text-xs">

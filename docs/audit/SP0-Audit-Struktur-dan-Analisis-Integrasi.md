@@ -733,7 +733,16 @@ Bagi projek Tidak Berfasa, fasa tunggal mengandungi semua aktiviti templat (juml
 | # | Keputusan | Kesan reka bentuk SP4 (cadangan) |
 |---|---|---|
 | I.5 | Status utama: varians **Mendahului / Mengikut Jadual / Lewat**. Lampu RAG diterbitkan daripada varians: **Hijau** (varians ≥ 0), **Kuning** (−0.01 hingga −19.99), **Merah** (≤ −20). Tiada pengesahan prestasi oleh Urus Setia. | Satu service pengiraan tulen. `status_indicator` sedia ada diisi daripada varians; `Project::updateStatusIndicator()` lama digantikan. Projek tanpa tarikh sasaran (rekod sejarah v1): tiada varians, tiada lampu. |
-| I.6 | Pegawai projek **memohon penutupan**; **Urus Setia mengesahkan** (status Menunggu Pengesahan Penutupan → Selesai). Projek Penyelenggaraan selesai pada **tarikh tamat kontrak**. | Kriteria permohonan penutupan dan butiran "tarikh tamat kontrak" diperincikan dalam reka bentuk SP4 sebelum dilaksanakan. |
+| I.6 | Pegawai projek **memohon penutupan**; **Urus Setia mengesahkan** (status Menunggu Pengesahan Penutupan → Selesai). Projek Penyelenggaraan selesai pada **tarikh tamat kontrak**. | **Butiran disahkan 23/11/2026:** (1) mohon tutup apabila semua aktiviti siap (100%); tarikh siap projek = tarikh siap aktiviti terakhir; laporan tertunggak tidak menyekat tetapi dipaparkan kepada Urus Setia. (2) Sahkan → Selesai (baca sahaja); Tolak → ulasan wajib, kembali Dalam Pelaksanaan; semasa menunggu, aktiviti dikunci dan pegawai boleh menarik balik; sejarah append-only. (3) Penyelenggaraan: tarikh tamat kontrak = Tarikh Tamat Projek; mohon tutup hanya selepas tarikh itu. (4) Urus Setia boleh menutup projek tanpa siap (Ditutup, ulasan wajib). (5) Tiada buka semula. |
+
+### L.9 Keputusan sebelum SP5 (23/11/2026)
+
+| Perkara | Keputusan |
+|---|---|
+| Eksport | **A:** Senarai Projek ke Excel, mengikut penapis skrin. **C:** Ringkasan Status Kemajuan Projek pada satu tarikh, dikumpulkan mengikut agensi, ke PDF (dan Excel), untuk kertas mesyuarat. B (PDF laporan bulanan) dan D (Excel statistik) tidak dalam SP5. |
+| Papan pemuka Pengurusan | (a) Statistik permohonan projek mengikut (i) tahun, (ii) Jabatan/Agensi, (iii) Kategori Permohonan. (b) Bilangan projek mengikut status kemajuan. (c) Ringkasan mengikut Jabatan/Agensi. (d) Statistik projek mengikut kos Jabatan. (e) Senarai projek lewat. |
+| (a)(i) Tahun | **Tahun permohonan dihantar** (tidak termasuk Draf), dengan pecahan status keputusan |
+| (d) Kos | **Jumlah Keseluruhan permohonan yang diluluskan** (termasuk SST). Tiada medan kos sebenar / nilai kontrak baharu. |
 
 ---
 

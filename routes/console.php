@@ -13,3 +13,8 @@ Artisan::command('inspire', function () {
 Schedule::command('sppict:deactivate-dormant-users')
     ->weeklyOn(1, '01:00')
     ->withoutOverlapping();
+
+// SP4: nilai cache kemajuan projek (kemajuan dirancang berubah apabila tarikh sasaran berlalu) — setiap hari 12:30 pagi.
+Schedule::command('sppict:refresh-project-progress')
+    ->dailyAt('00:30')
+    ->withoutOverlapping();

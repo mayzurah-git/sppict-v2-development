@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\ProjectStatus;
 use App\Models\Application;
 use App\Models\Project;
 use App\Models\User;
@@ -54,12 +55,56 @@ class ProjectPolicy
     }
 
     /**
-     * Pindaan jadual (I.3) dan kemas kini kemajuan (SP3): Pegawai Utama / Kedua aktif (I.11).
+     * Pindaan jadual (I.3), struktur dan kemas kini aktiviti / dokumen aktiviti (SP3): Pegawai Utama / Kedua
+     * aktif (I.11). SP4: disekat semasa Menunggu Pengesahan Penutupan.
      */
     public function manage(User $user, Project $project): bool
     {
-        return $this->canAct($user)
+        return $this->isOfficer($user, $project)
             && ! $project->isReadOnly()
+            && $project->status !== ProjectStatus::PendingClosure;
+    }
+
+    /**
+     * Laporan kemajuan bulanan dan dokumennya: pegawai aktif; masih dibenarkan semasa Menunggu Pengesahan
+     * Penutupan supaya laporan tertunggak boleh dihantar.
+     */
+    public function manageReports(User $user, Project $project): bool
+    {
+        return $this->isOfficer($user, $project) && ! $project->isReadOnly();
+    }
+
+    /**
+     * SP4 (I.6): mohon penutupan (Dalam Pelaksanaan). Syarat kemajuan disemak oleh ProjectClosureService.
+     */
+    public function requestClosure(User $user, Project $project): bool
+    {
+        return $this->isOfficer($user, $project) && $project->status === ProjectStatus::InProgress;
+    }
+
+    /** SP4: tarik balik permohonan penutupan. */
+    public function withdrawClosure(User $user, Project $project): bool
+    {
+        return $this->isOfficer($user, $project) && $project->status === ProjectStatus::PendingClosure;
+    }
+
+    /** SP4: sahkan / tolak permohonan penutupan: Urus Setia sahaja. */
+    public function decideClosure(User $user, Project $project): bool
+    {
+        return $this->isUrusSetia($user) && $project->status === ProjectStatus::PendingClosure;
+    }
+
+    /** SP4: tutup projek tanpa siap (dihentikan / dibatalkan): Urus Setia sahaja, dengan ulasan wajib. */
+    public function terminate(User $user, Project $project): bool
+    {
+        return $this->isUrusSetia($user)
+            && ! $project->isLegacy()
+            && in_array($project->status, [ProjectStatus::InProgress, ProjectStatus::PendingClosure], true);
+    }
+
+    private function isOfficer(User $user, Project $project): bool
+    {
+        return $this->canAct($user)
             && $project->application !== null
             && $this->inProjectAgency($user, $project)
             && $project->application->isActiveOfficer($user);
@@ -80,6 +125,7 @@ class ProjectPolicy
     {
         return $this->isUrusSetia($user)
             && ! $project->isReadOnly()
+            && $project->status !== ProjectStatus::PendingClosure
             && $project->isStructureLocked();
     }
 

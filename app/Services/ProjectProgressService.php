@@ -83,6 +83,8 @@ class ProjectProgressService
         });
 
         Log::info("Aktiviti projek {$activity->uuid} ditanda siap oleh ID Pengguna {$user->id}");
+
+        app(ProgressCalculator::class)->refresh(Project::findOrFail($activity->project_id));
     }
 
     /**
@@ -121,6 +123,8 @@ class ProjectProgressService
         });
 
         Log::info("Tanda siap aktiviti projek {$activity->uuid} dibatalkan oleh ID Pengguna {$user->id}");
+
+        app(ProgressCalculator::class)->refresh(Project::findOrFail($activity->project_id));
     }
 
     /**
@@ -138,7 +142,8 @@ class ProjectProgressService
         $actor = User::findOrFail($user->id);
         $project = Project::findOrFail($project->id);
 
-        if ($actor->cannot('manage', $project)) {
+        // Dokumen laporan: dibenarkan semasa Menunggu Pengesahan Penutupan (laporan tertunggak).
+        if ($actor->cannot($report ? 'manageReports' : 'manage', $project)) {
             throw new AuthorizationException('Anda tidak dibenarkan memuat naik dokumen bagi projek ini.');
         }
 
@@ -213,11 +218,15 @@ class ProjectProgressService
             $project = Project::lockForUpdate()->findOrFail($attachment->project_id);
             $actor = User::findOrFail($user->id);
 
-            if ($actor->cannot('manage', $project)) {
+            $attachment = ProjectProgressAttachment::withTrashed()->findOrFail($attachment->id);
+
+            if ($actor->cannot($attachment->project_progress_report_id ? 'manageReports' : 'manage', $project)) {
                 throw new AuthorizationException('Anda tidak dibenarkan memadam dokumen projek ini.');
             }
 
-            $attachment = ProjectProgressAttachment::findOrFail($attachment->id);
+            if ($attachment->trashed()) {
+                throw ValidationException::withMessages(['attachment' => 'Dokumen ini telah dipadam.']);
+            }
 
             if ($attachment->report?->isSubmitted()) {
                 throw ValidationException::withMessages(['attachment' => 'Dokumen laporan yang telah dihantar tidak boleh dipadam.']);

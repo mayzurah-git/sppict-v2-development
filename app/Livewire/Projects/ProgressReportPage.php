@@ -66,7 +66,7 @@ class ProgressReportPage extends Component
     #[Computed]
     public function canEdit(): bool
     {
-        return ! $this->report->isSubmitted() && Auth::user()->can('manage', $this->project);
+        return ! $this->report->isSubmitted() && Auth::user()->can('manageReports', $this->project);
     }
 
     public function saveDraft(ProjectReportService $service): void
@@ -120,7 +120,7 @@ class ProgressReportPage extends Component
 
     private function authorizeEdit(): void
     {
-        $this->authorize('manage', $this->project);
+        $this->authorize('manageReports', $this->project);
         $this->resetErrorBag();
     }
 

@@ -234,6 +234,23 @@ class Project extends Model implements Auditable
         return $this->hasMany(ProjectProgressUpdate::class)->latest('id');
     }
 
+    /** SP4: sejarah penutupan projek, terkini dahulu. */
+    public function closureEvents()
+    {
+        return $this->hasMany(ProjectClosureEvent::class)->latest('id');
+    }
+
+    public function closer()
+    {
+        return $this->belongsTo(User::class, 'closed_by')->withTrashed();
+    }
+
+    /** SP4 (I.6): projek Penyelenggaraan selesai pada tarikh tamat kontrak (Tarikh Tamat Projek). */
+    public function isMaintenance(): bool
+    {
+        return $this->progressTemplate?->procurementType?->code === 'penyelenggaraan';
+    }
+
     public function starter()
     {
         return $this->belongsTo(User::class, 'started_by')->withTrashed();

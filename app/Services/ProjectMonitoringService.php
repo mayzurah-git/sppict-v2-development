@@ -85,6 +85,8 @@ class ProjectMonitoringService
 
         Log::info("Pemantauan projek dimulakan: permohonan {$application->reference_number} (projek {$project->uuid}) oleh ID Pengguna {$user->id}");
 
+        app(ProgressCalculator::class)->refresh($project); // SP4: nilai cache kemajuan
+
         return $project;
     }
 
@@ -126,7 +128,10 @@ class ProjectMonitoringService
 
         Log::info("Struktur projek {$project->uuid} dikemas kini oleh ID Pengguna {$user->id}");
 
-        return $project->fresh();
+        $fresh = $project->fresh();
+        app(ProgressCalculator::class)->refresh($fresh);
+
+        return $fresh;
     }
 
     /**
@@ -227,6 +232,8 @@ class ProjectMonitoringService
         });
 
         Log::info("Jadual projek {$project->uuid} dipinda ({$count} perubahan) oleh ID Pengguna {$user->id}");
+
+        app(ProgressCalculator::class)->refresh($project->fresh());
 
         return $count;
     }

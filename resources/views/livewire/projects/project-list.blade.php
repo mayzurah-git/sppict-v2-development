@@ -83,7 +83,7 @@
             <h3 id="bahagian-projek" class="text-sm font-bold text-slate-800">Senarai Projek ({{ $projects->total() }})</h3>
         </div>
         <div class="overflow-x-auto">
-            <table class="w-full min-w-[960px] text-left text-xs">
+            <table class="w-full min-w-[1200px] text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">
                     <tr>
                         <th scope="col" class="p-3">No. Rujukan</th>
@@ -92,6 +92,9 @@
                         <th scope="col" class="p-3">Templat</th>
                         <th scope="col" class="p-3">Fasa</th>
                         <th scope="col" class="p-3">Tempoh Projek</th>
+                        <th scope="col" class="p-3 text-right">Sebenar</th>
+                        <th scope="col" class="p-3 text-right">Dirancang</th>
+                        <th scope="col" class="p-3">Jadual</th>
                         <th scope="col" class="p-3">Status</th>
                         <th scope="col" class="p-3"><span class="sr-only">Tindakan</span></th>
                     </tr>
@@ -107,6 +110,21 @@
                             <td class="p-3 whitespace-nowrap tabular-nums">
                                 {{ $project->planned_start_date?->format('d/m/Y') ?? '-' }} – {{ $project->planned_end_date?->format('d/m/Y') ?? '-' }}
                             </td>
+                            {{-- SP4: nilai cache (dikemas kini setiap perubahan dan setiap hari) --}}
+                            <td class="p-3 text-right font-bold tabular-nums">{{ number_format((float) $project->actual_progress_percent, 2) }}%</td>
+                            <td class="p-3 text-right tabular-nums">{{ $project->planned_progress_percent === null ? '-' : number_format((float) $project->planned_progress_percent, 2) . '%' }}</td>
+                            <td class="p-3 whitespace-nowrap">
+                                @if ($project->variance_percent !== null)
+                                    @php
+                                        $variance = (float) $project->variance_percent;
+                                    @endphp
+                                    <span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold ring-1 {{ \App\Enums\ScheduleStatus::indicatorClasses(\App\Enums\ScheduleStatus::indicatorFor($variance)) }}">
+                                        {{ \App\Enums\ScheduleStatus::fromVariance($variance)->label() }} ({{ sprintf('%+.2f', $variance) }})
+                                    </span>
+                                @else
+                                    <span class="text-[11px] text-slate-500">Tiada data rancangan</span>
+                                @endif
+                            </td>
                             <td class="p-3">
                                 <span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">{{ $project->status->label() }}</span>
                                 @if ($project->isAwaitingJpict())
@@ -119,7 +137,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="p-6 text-center text-sm text-slate-500">Tiada projek dalam pemantauan.</td>
+                            <td colspan="11" class="p-6 text-center text-sm text-slate-500">Tiada projek dalam pemantauan.</td>
                         </tr>
                     @endforelse
                 </tbody>
