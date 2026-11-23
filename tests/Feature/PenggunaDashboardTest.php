@@ -145,26 +145,32 @@ class PenggunaDashboardTest extends TestCase
     public function test_project_progress_lists_latest_report_and_indicator(): void
     {
         $app = $this->application('CLOSED', 'Pusat Data Mini');
+        // SP5: nilai cache kemajuan SP4 dan status kitaran projek; laporan terkini = laporan Dihantar terkini.
         $project = Project::forceCreate([
             'application_id' => $app->id, 'agency_id' => $this->agency->id,
+            'status' => 'IN_PROGRESS',
+            'actual_progress_percent' => 35, 'planned_progress_percent' => 60, 'variance_percent' => -25,
             'status_indicator' => 'RED',
-            'physical_progress_percent' => 35, 'financial_progress_percent' => 41, 'is_completed' => false,
         ]);
-        foreach ([[8, 30], [9, 35]] as [$month, $physical]) {
+        foreach ([[8, 'SUBMITTED'], [9, 'SUBMITTED'], [10, 'DRAFT']] as [$month, $status]) {
             ProjectProgressReport::forceCreate([
                 'project_id' => $project->id, 'report_year' => 2026, 'report_month' => $month,
-                'submitted_by' => $this->pemohon->id,
-                'physical_actual' => $physical, 'physical_planned' => 60,
-                'financial_actual' => 41, 'financial_planned' => 50,
+                'status' => $status, 'submitted_by' => $this->pemohon->id,
             ]);
         }
 
         $html = $this->actingAs($this->pemohon)->get('/dashboard')->assertOk()->getContent();
 
         $this->assertStringContainsString('Pusat Data Mini', $html);
-        $this->assertStringContainsString('Sakit · lewat 25%', $html);
-        $this->assertStringContainsString('September 2026', $html);
+        $this->assertStringContainsString('Lewat · 25 mata', $html);
+        $this->assertStringContainsString('dirancang 60%', $html);
+        $this->assertStringContainsString('September 2026', $html);   // Draf Oktober tidak dikira
+        $this->assertStringNotContainsString('Oktober 2026', $html);
         $this->assertSame('1', $this->cardValue($html, 'Projek Dalam Pelaksanaan'));
+
+        $project->forceFill(['status' => 'COMPLETED'])->save();
+        $html = $this->actingAs($this->pemohon)->get('/dashboard')->getContent();
+        $this->assertSame('0', $this->cardValue($html, 'Projek Dalam Pelaksanaan'));
     }
 
     public function test_other_roles_keep_their_own_dashboard_and_nav_colour(): void

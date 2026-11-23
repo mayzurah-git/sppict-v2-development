@@ -6,6 +6,7 @@ use App\Enums\ProjectStatus;
 use App\Models\Agency;
 use App\Models\Application;
 use App\Models\Project;
+use App\Services\ProjectQueryService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -47,6 +48,12 @@ class ProjectList extends Component
         }
     }
 
+    /** @return array{search: string, status: string, agency: string} */
+    public function filters(): array
+    {
+        return ['search' => $this->search, 'status' => $this->status, 'agency' => $this->agency];
+    }
+
     public function render()
     {
         // Kebenaran disemak semula pada setiap permintaan (peranan / status akaun mungkin berubah).
@@ -57,19 +64,8 @@ class ProjectList extends Component
         $agencyId = $allAgencies ? ($this->agency !== '' ? (int) $this->agency : null) : $user->agency_id;
         $search = trim($this->search);
 
-        $projects = Project::query()
-            ->with(['application:id,uuid,reference_number,title,total_cost,estimated_cost', 'agency:id,code,name', 'progressTemplate:id,code,name'])
-            ->withCount('phases')
-            ->when(! $allAgencies, fn (Builder $q) => $q->where('agency_id', $user->agency_id ?? 0))
-            ->when($allAgencies && $agencyId, fn (Builder $q) => $q->where('agency_id', $agencyId))
-            ->when(ProjectStatus::tryFrom($this->status), fn (Builder $q, ProjectStatus $status) => $q->where('status', $status->value))
-            ->when($search !== '', fn (Builder $q) => $q->where(fn (Builder $q) => $q
-                ->where('legacy_reference', 'like', "%{$search}%")
-                ->orWhereHas('application', fn (Builder $a) => $a
-                    ->where('reference_number', 'like', "%{$search}%")
-                    ->orWhere('title', 'like', "%{$search}%"))))
-            ->latest('id')
-            ->paginate(20);
+        // SP5: pertanyaan dikongsi dengan eksport Excel (skop & penapis sama).
+        $projects = app(ProjectQueryService::class)->list($user, $this->filters())->paginate(20);
 
         // Permohonan Lulus JTICT yang belum mempunyai rekod pemantauan (termasuk projek dipadam).
         $awaiting = Application::approvedByJtict()

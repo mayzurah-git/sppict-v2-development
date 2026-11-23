@@ -6,7 +6,7 @@ use App\Models\User;
 
 /**
  * Skema warna antara muka mengikut peranan (bar menu, pautan, aksen papan pemuka & halaman Profil):
- * Superadmin indigo, Urus Setia hijau, Pengguna Biasa biru langit. Peranan lain menggunakan
+ * Superadmin indigo, Urus Setia hijau, Pengguna Biasa biru langit, Pengurusan arang & emas. Peranan lain menggunakan
  * skema lalai (hijau SPPICT).
  *
  * Kelas Tailwind ditulis penuh di sini supaya dikesan oleh `content` dalam tailwind.config.js.
@@ -54,6 +54,27 @@ class RoleTheme
             'panel' => 'bg-sky-50 border-sky-100 text-sky-950',
             'dots' => 'text-sky-400',
         ],
+        // Pengurusan: Arang & Emas (pilihan A, 23/11/2026) — neutral supaya carta menonjol.
+        'pengurusan' => [
+            'bar' => 'bg-slate-800',
+            'active' => 'border-amber-400 text-white',
+            'idle' => 'border-transparent text-slate-300 hover:text-white',
+            'muted' => 'text-slate-300',
+            'accent' => 'text-amber-400',
+            'avatar' => 'bg-amber-400 text-slate-900',
+            'focus' => 'focus-visible:ring-amber-400',
+            'mobileIdle' => 'text-slate-300 hover:text-white hover:bg-white/5',
+            'link' => 'text-slate-700',
+            'canvas' => 'bg-slate-100/70',
+            'soft' => 'bg-slate-100 text-slate-700',
+            'eyebrow' => 'text-slate-600',
+            'button' => 'bg-slate-800 hover:bg-slate-900 text-white focus-visible:ring-slate-500',
+            'buttonOutline' => 'border-slate-700 text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-500',
+            'input' => 'focus:border-slate-600 focus:ring-slate-600/20',
+            'inputWithin' => 'focus-within:border-slate-600 focus-within:ring-slate-600/20',
+            'panel' => 'bg-slate-50 border-slate-200 text-slate-900',
+            'dots' => 'text-slate-500',
+        ],
         'default' => [
             'bar' => 'bg-brand-dark',
             'active' => 'border-amber-400 text-white',
@@ -81,13 +102,22 @@ class RoleTheme
      */
     public static function for(?User $user): array
     {
-        foreach (['superadmin', 'pengguna_biasa'] as $role) {
+        if ($user?->hasRole('superadmin')) {
+            return self::THEMES['superadmin'];
+        }
+
+        // Urus Setia kekal hijau walaupun memegang peranan lain.
+        if ($user?->hasRole('pentadbir_urus_setia')) {
+            return self::THEMES['default'];
+        }
+
+        foreach (['pengguna_biasa', 'pengurusan'] as $role) {
             if ($user?->hasRole($role)) {
                 return self::THEMES[$role];
             }
         }
 
-        // Urus Setia, Pengurusan & lain-lain: hijau SPPICT.
+        // Lain-lain: hijau SPPICT.
         return self::THEMES['default'];
     }
 }

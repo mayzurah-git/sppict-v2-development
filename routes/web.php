@@ -31,6 +31,7 @@ use App\Livewire\Projects\ProjectSetup;
 use App\Livewire\Projects\ShowProject;
 use App\Livewire\Projects\ProgressReportPage;
 use App\Http\Controllers\ProjectAttachmentController;
+use App\Http\Controllers\ProjectExportController;
 
 Route::view('/', 'welcome');
 
@@ -78,6 +79,10 @@ Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(fun
     // Urus Setia & Pengurusan baca sahaja; I.11: Pegawai Utama / Kedua aktif mengemas kini).
     Route::middleware('not-role:superadmin')->prefix('projek')->name('projects.')->group(function () {
         Route::get('/', ProjectList::class)->middleware('can:viewAny,' . \App\Models\Project::class)->name('index');
+        // SP5: eksport A (Senarai Projek, Excel) dan C (Ringkasan Status Kemajuan, PDF / Excel)
+        Route::get('/eksport/senarai.xlsx', [ProjectExportController::class, 'list'])->name('export.list');
+        Route::get('/eksport/ringkasan.pdf', [ProjectExportController::class, 'summaryPdf'])->name('summary.pdf');
+        Route::get('/eksport/ringkasan.xlsx', [ProjectExportController::class, 'summaryExcel'])->name('summary.excel');
         Route::get('/mula/{application}', ProjectSetup::class)->name('start');
         Route::get('/{uuid}', ShowProject::class)->name('show');
         Route::get('/{project}/struktur', ProjectSetup::class)->name('structure');

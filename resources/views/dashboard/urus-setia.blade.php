@@ -226,3 +226,15 @@
         </section>
     </aside>
 </div>
+
+<!-- SP5: Pemantauan Projek (status, ringkasan agensi, projek lewat) -->
+<section id="pemantauan-projek" class="scroll-mt-6 flex flex-col gap-3">
+    <div class="flex flex-wrap justify-between items-end gap-2">
+        <div class="flex flex-col gap-0.5">
+            <h2 class="text-lg font-extrabold">Pemantauan Projek</h2>
+            <span class="text-[13px] text-slate-500">Status kemajuan projek yang telah Lulus JTICT, semua Jabatan/Agensi.</span>
+        </div>
+        <a href="{{ route('projects.index') }}" class="text-[13px] font-bold text-green-800 hover:underline">Senarai Projek →</a>
+    </div>
+    <livewire:dashboard.project-statistics />
+</section>

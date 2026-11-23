@@ -7,7 +7,15 @@
                 <p class="text-xs text-slate-500 mt-0.5">Paparan baca sahaja. Kemajuan dikemas kini oleh Pegawai Utama / Pegawai Kedua projek.</p>
             @endunless
         </div>
-        <a href="{{ route('dashboard') }}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">← Kembali ke Dashboard</a>
+        <div class="flex flex-wrap gap-2">
+            {{-- SP5: eksport A mengikut penapis semasa; eksport C (Urus Setia / Pengurusan) --}}
+            <a href="{{ route('projects.export.list', array_filter(['search' => $search, 'status' => $status, 'agency' => $agency])) }}" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition">Eksport Senarai (Excel)</a>
+            @can('viewStatistics', \App\Models\Project::class)
+                <a href="{{ route('projects.summary.pdf', array_filter(['agency' => $agency])) }}" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition">Ringkasan Status (PDF)</a>
+                <a href="{{ route('projects.summary.excel', array_filter(['agency' => $agency])) }}" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition">Ringkasan Status (Excel)</a>
+            @endcan
+            <a href="{{ route('dashboard') }}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">← Kembali ke Dashboard</a>
+        </div>
     </div>
 
     @if (session()->has('message'))

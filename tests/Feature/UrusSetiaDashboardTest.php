@@ -115,7 +115,8 @@ class UrusSetiaDashboardTest extends TestCase
         }
 
         // Hanya jadual senarai disemak (amaran "Tanpa Pegawai Utama" di lajur sisi turut menyenaraikan tajuk).
-        $table = fn (string $query) => Str::between($this->actingAs($this->urusSetia)->get('/dashboard' . $query)->assertOk()->getContent(), '<tbody', '</tbody>');
+        // SP5: betweenFirst kerana papan pemuka kini mempunyai jadual statistik projek selepas senarai permohonan.
+        $table = fn (string $query) => Str::betweenFirst($this->actingAs($this->urusSetia)->get('/dashboard' . $query)->assertOk()->getContent(), '<tbody', '</tbody>');
 
         $this->assertStringContainsString('Projek Dihantar', $table(''));
         $this->assertStringNotContainsString('Projek Dalam JTICT', $table(''));

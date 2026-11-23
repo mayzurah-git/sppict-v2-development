@@ -94,26 +94,8 @@ class Project extends Model implements Auditable
         'jpict_recorded_at' => 'datetime',
     ];
 
-    // --- LOGIK PERNIAGAAN INDIKATOR LAMPU ---
-
-    /**
-     * Hitung status indicator secara automatik berdasarkan perbezaan jadual
-     */
-    public function updateStatusIndicator(float $plannedPhysicalProgress): string
-    {
-        $variance = $plannedPhysicalProgress - $this->physical_progress_percent;
-
-        if ($variance <= 0) {
-            $this->status_indicator = 'GREEN'; // On-track / Mendahului
-        } elseif ($variance > 0 && $variance < 20) {
-            $this->status_indicator = 'AMBER'; // Lewat 1% - 19%
-        } else {
-            $this->status_indicator = 'RED';   // Sakit / Lewat >= 20%
-        }
-
-        $this->save();
-        return $this->status_indicator;
-    }
+    // SP5: Project::updateStatusIndicator() lama telah dibuang. Lampu (status_indicator) kini diisi oleh
+    // App\Services\ProgressCalculator::refresh() berdasarkan varians (keputusan I.5).
 
     // --- RELATIONSHIPS ---
 

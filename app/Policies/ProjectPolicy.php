@@ -102,6 +102,17 @@ class ProjectPolicy
             && in_array($project->status, [ProjectStatus::InProgress, ProjectStatus::PendingClosure], true);
     }
 
+    /**
+     * SP5: statistik semua agensi (papan pemuka) dan Ringkasan Status Kemajuan (eksport C): Urus Setia dan
+     * Pengurusan sahaja (I.9). Superadmin ditolak.
+     */
+    public function viewStatistics(User $user): bool
+    {
+        return $user->canUseSystem()
+            && $user->hasAnyRole(['pentadbir_urus_setia', 'pengurusan'])
+            && ! $user->hasRole('superadmin');
+    }
+
     private function isOfficer(User $user, Project $project): bool
     {
         return $this->canAct($user)
