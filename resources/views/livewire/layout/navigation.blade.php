@@ -30,6 +30,7 @@ new class extends Component
             ['label' => 'Keputusan JTICT', 'href' => route('jtict.index')], // PP4.3A
             ...($user->can('create', \App\Models\Application::class) ? [null, ['label' => 'Permohonan Baharu', 'href' => url('/application/new')]] : []),
         ]];
+        $menu[] = ['label' => 'Projek', 'href' => route('projects.index'), 'active' => request()->routeIs('projects.*')]; // SP2
         $menu[] = ['label' => 'Mesyuarat', 'active' => request()->routeIs('meetings.*'), 'children' => [
             ['label' => 'Senarai Mesyuarat', 'href' => route('meetings.index')],
             ['label' => 'Daftar Mesyuarat', 'href' => route('meetings.create')],
@@ -68,7 +69,12 @@ new class extends Component
             ['label' => 'Senarai Permohonan', 'hint' => 'Semua permohonan anda, termasuk draf', 'href' => route('applications.index')],
             ...($user->can('create', \App\Models\Application::class) ? [['label' => 'Permohonan Baru', 'hint' => 'Daftar permohonan projek ICT baharu', 'href' => route('application.create')]] : []),
         ]];
-        $menu[] = ['label' => 'Kemajuan Projek', 'href' => route('dashboard') . '#kemajuan-projek', 'active' => false];
+        $menu[] = ['label' => 'Kemajuan Projek', 'href' => route('projects.index'), 'active' => request()->routeIs('projects.*')]; // SP2
+    }
+
+    // SP2 (I.9): Pengurusan melihat maklumat projek secara baca sahaja.
+    if ($user->hasRole('pengurusan') && ! $user->hasAnyRole(['superadmin', 'pentadbir_urus_setia', 'pengguna_biasa'])) {
+        $menu[] = ['label' => 'Projek', 'href' => route('projects.index'), 'active' => request()->routeIs('projects.*')];
     }
 
     $roleLabels = [

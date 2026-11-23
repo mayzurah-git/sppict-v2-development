@@ -51,7 +51,18 @@ class Project extends Model implements Auditable
         'closed_by',
         'closed_at',
         'closure_remarks',
+        // SP2: kelulusan JPICT (pilihan, I.1)
+        'jpict_approved_at',
+        'jpict_reference',
+        'jpict_recorded_by',
+        'jpict_recorded_at',
     ];
+
+    /** I.1: projek dengan jumlah kos sekurang-kurangnya nilai ini memerlukan kelulusan muktamad JPICT (AGENTS.md §3). */
+    public const JPICT_THRESHOLD = 500000;
+
+    /** L.3: had atas bilangan fasa bagi projek Berfasa. */
+    public const MAX_PHASES = 10;
 
     protected $attributes = [
         'source' => 'V2',
@@ -79,6 +90,8 @@ class Project extends Model implements Auditable
         'progress_evaluated_at' => 'date',
         'started_at' => 'datetime',
         'closed_at' => 'datetime',
+        'jpict_approved_at' => 'date',
+        'jpict_recorded_at' => 'datetime',
     ];
 
     // --- LOGIK PERNIAGAAN INDIKATOR LAMPU ---
@@ -144,6 +157,79 @@ class Project extends Model implements Auditable
     public function isStructureLocked(): bool
     {
         return $this->structure_locked_at !== null;
+    }
+
+    /**
+     * SP2: projek baca sahaja untuk semua pengguna (rekod sejarah v1, Selesai, Ditutup).
+     */
+    public function isReadOnly(): bool
+    {
+        return in_array($this->status, [ProjectStatus::Historical, ProjectStatus::Completed, ProjectStatus::Closed], true);
+    }
+
+    /**
+     * SP2 (I.1): jumlah kos projek bagi ambang JPICT. Jumlah Keseluruhan permohonan (termasuk SST jika
+     * ditanda); permohonan lama tanpa jumlah keseluruhan menggunakan anggaran kos.
+     */
+    public function totalCost(): ?float
+    {
+        $cost = $this->application?->total_cost ?? $this->application?->estimated_cost;
+
+        return $cost === null ? null : (float) $cost;
+    }
+
+    /**
+     * SP2 (I.1): projek >= RM500,000 memerlukan kelulusan muktamad JPICT.
+     */
+    public function requiresJpict(): bool
+    {
+        $cost = $this->totalCost();
+
+        return $cost !== null && $cost >= self::JPICT_THRESHOLD;
+    }
+
+    /**
+     * SP2 (I.1): penanda "Menunggu JPICT". Tidak menyekat pemantauan.
+     */
+    public function isAwaitingJpict(): bool
+    {
+        return ! $this->isLegacy() && $this->requiresJpict() && $this->jpict_approved_at === null;
+    }
+
+    public function phases()
+    {
+        return $this->hasMany(ProjectPhase::class)->orderBy('phase_number');
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(ProjectProgressActivity::class);
+    }
+
+    /**
+     * Sejarah pindaan jadual (I.3), terkini dahulu.
+     */
+    public function scheduleChanges()
+    {
+        return $this->hasMany(ProjectScheduleChange::class)->latest('id');
+    }
+
+    /**
+     * Sejarah buka kunci struktur oleh Urus Setia (L.3), terkini dahulu.
+     */
+    public function structureUnlocks()
+    {
+        return $this->hasMany(ProjectStructureUnlock::class)->latest('id');
+    }
+
+    public function starter()
+    {
+        return $this->belongsTo(User::class, 'started_by')->withTrashed();
+    }
+
+    public function jpictRecorder()
+    {
+        return $this->belongsTo(User::class, 'jpict_recorded_by')->withTrashed();
     }
 
     /**

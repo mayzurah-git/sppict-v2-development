@@ -92,6 +92,22 @@
         </div>
     @endcan
 
+    {{-- SP2: Pemantauan Projek bagi keputusan JTICT terkini Lulus. Kebenaran sebenar disemak di ProjectMonitoringService. --}}
+    @if ($application->isApprovedByJtict())
+        @php($monitoredProject = $application->project)
+        @if ($monitoredProject && auth()->user()->can('view', $monitoredProject))
+            <div class="p-4 bg-sky-50 border border-sky-200 text-sky-900 text-xs rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <p><span class="font-bold">Pemantauan Projek:</span> projek ini sedang dipantau ({{ $monitoredProject->status->label() }}).</p>
+                <a href="{{ route('projects.show', $monitoredProject->uuid) }}" class="shrink-0 px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl transition">Lihat Pemantauan Projek</a>
+            </div>
+        @elseif (! $monitoredProject && auth()->user()->can('start', [\App\Models\Project::class, $application]))
+            <div class="p-4 bg-sky-50 border border-sky-200 text-sky-900 text-xs rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <p><span class="font-bold">Lulus JTICT.</span> Mulakan pemantauan dan tetapkan jadual projek.</p>
+                <a href="{{ route('projects.start', $application->uuid) }}" class="shrink-0 px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl transition">Mulakan Pemantauan</a>
+            </div>
+        @endif
+    @endif
+
     {{-- PP4.3C: Salin Permohonan (keputusan JTICT Kaji Semula; O7 / O8 / O10). Kebenaran sebenar disemak di service. --}}
     @if ($this->isReviewOutcome)
         <div class="p-4 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">

@@ -26,6 +26,9 @@ use App\Livewire\MasterData\ProcurementMethodManagement;
 use App\Livewire\Users\ManageUsers;
 use App\Livewire\Users\RegisterUser;
 use App\Livewire\Users\RegistrationRequests;
+use App\Livewire\Projects\ProjectList;
+use App\Livewire\Projects\ProjectSetup;
+use App\Livewire\Projects\ShowProject;
 
 Route::view('/', 'welcome');
 
@@ -68,6 +71,15 @@ Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(fun
     Route::get('/urus-setia/jtict', JtictList::class)
         ->middleware(['role:pentadbir_urus_setia', 'can:viewJtictQueue,' . \App\Models\Application::class])
         ->name('jtict.index');
+
+    // SP2: Modul Status Kemajuan Projek. Akses ikut ProjectPolicy (I.9: Superadmin tiada akses;
+    // Urus Setia & Pengurusan baca sahaja; I.11: Pegawai Utama / Kedua aktif mengemas kini).
+    Route::middleware('not-role:superadmin')->prefix('projek')->name('projects.')->group(function () {
+        Route::get('/', ProjectList::class)->middleware('can:viewAny,' . \App\Models\Project::class)->name('index');
+        Route::get('/mula/{application}', ProjectSetup::class)->name('start');
+        Route::get('/{uuid}', ShowProject::class)->name('show');
+        Route::get('/{project}/struktur', ProjectSetup::class)->name('structure');
+    });
 
     Route::get('/admin/agencies', AgencyManagement::class)->middleware('role:pentadbir_urus_setia')->name('admin.agencies');
 
