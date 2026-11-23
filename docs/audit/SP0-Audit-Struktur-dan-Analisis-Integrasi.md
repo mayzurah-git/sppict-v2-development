@@ -542,12 +542,12 @@ Keputusan yang telah dimuktamadkan dalam spesifikasi SP0 tidak dibangkitkan semu
 | I.2 | **Guna semula `projects` dan `project_progress_reports`** (tambah kolum) atau cipta jadual baharu `project_progress` seperti nama cadangan? | ✅ **Diputuskan 20/11/2026: guna semula** (F.0) |
 | I.3 | **Sumber tarikh jadual:** tarikh mula dan tamat projek serta tarikh setiap aktiviti diisi oleh Pemohon semasa "Mulakan Pemantauan"? Boleh dipinda selepas itu? Siapa meluluskan pindaan jadual? | ✅ **Diputuskan 20/11/2026:** Pemohon menetapkan tarikh mula dan tamat projek. Pindaan dibenarkan tanpa kelulusan Urus Setia, tetapi dengan catatan justifikasi wajib. Setiap pindaan direkodkan dalam sejarah dan tidak menimpa jadual terdahulu (L.6) |
 | I.4 | **Kemajuan kewangan:** PRD §7.5 dan kolum sedia ada (`financial_*`) menyebutnya, tetapi spesifikasi SP tidak. Diperlukan? | Tangguh. Kekalkan kolum, tiada UI dalam SP1–SP4. |
-| I.5 | **Indikator dan pengesahan:** PRD menyebut lampu Hijau/Kuning/Merah (lewat 1–19% / ≥ 20%) dan "Urus Setia mengesahkan kemajuan". Spesifikasi SP menyebut varians Mendahului/Mengikut/Lewat dan Urus Setia **melihat** sahaja. Mana yang terpakai? Adakah lampu RAG masih dipaparkan berdasarkan varians? | Varians SP sebagai status utama. RAG diterbitkan daripada varians (0 / −0.01 hingga −19.99 / ≤ −20) untuk keserasian papan pemuka. Tiada pengesahan Urus Setia. |
-| I.6 | **Kriteria penutupan (Selesai):** contohnya 100% + Akuan Siap Kerja dimuat naik + tarikh siap sebenar. Siapa menutup? Bagi Penyelenggaraan (100% apabila Dokumen Kontrak selesai), bila status Selesai? | Pemohon mohon tutup, Urus Setia sahkan penutupan. Penyelenggaraan selesai pada tarikh tamat kontrak. |
+| I.5 | **Indikator dan pengesahan:** PRD menyebut lampu Hijau/Kuning/Merah (lewat 1–19% / ≥ 20%) dan "Urus Setia mengesahkan kemajuan". Spesifikasi SP menyebut varians Mendahului/Mengikut/Lewat dan Urus Setia **melihat** sahaja. Mana yang terpakai? Adakah lampu RAG masih dipaparkan berdasarkan varians? | ✅ **Diputuskan 23/11/2026 (ikut cadangan):** varians SP (Mendahului / Mengikut Jadual / Lewat) sebagai status utama. RAG diterbitkan daripada varians (0 / −0.01 hingga −19.99 / ≤ −20). Tiada pengesahan prestasi oleh Urus Setia. Lihat L.8. |
+| I.6 | **Kriteria penutupan (Selesai):** contohnya 100% + Akuan Siap Kerja dimuat naik + tarikh siap sebenar. Siapa menutup? Bagi Penyelenggaraan (100% apabila Dokumen Kontrak selesai), bila status Selesai? | ✅ **Diputuskan 23/11/2026 (ikut cadangan):** pegawai projek memohon penutupan, Urus Setia mengesahkan penutupan. Projek Penyelenggaraan selesai pada tarikh tamat kontrak. Lihat L.8. |
 | I.7 | **Jenis jadual aktiviti:** aktiviti mana DURATION dan mana MILESTONE? | ✅ **Diputuskan 20/11/2026:** satu tarikh sasaran bagi setiap aktiviti, seperti v1. Tiada pengelasan DURATION/MILESTONE. Dirancang = pemberat aktiviti yang tarikh sasarannya ≤ tarikh penilaian (L.2). |
-| I.8 | **Format dokumen sokongan kemajuan:** PDF sahaja (AGENTS.md) atau PDF/DOCX/imej? Saiz maksimum? Dokumen wajib menyekat status Selesai aktiviti atau hanya diperlukan pada 100%? | PDF sahaja, 25 MB. Wajib apabila aktiviti 100%. |
+| I.8 | **Format dokumen sokongan kemajuan:** PDF sahaja (AGENTS.md) atau PDF/DOCX/imej? Saiz maksimum? Dokumen wajib menyekat status Selesai aktiviti atau hanya diperlukan pada 100%? | ✅ **Diputuskan 23/11/2026:** PDF sahaja, maksimum 25 MB. Dokumen wajib (matriks §5.5) mesti dimuat naik **sebelum** aktiviti boleh ditanda siap. |
 | I.9 | **Akses Superadmin dan Pengurusan:** kedua-duanya kini tidak boleh membuka permohonan. Bolehkah mereka melihat Senarai dan Maklumat Projek (baca sahaja)? | ✅ **Diputuskan 20/11/2026:** **Pengurusan sahaja** boleh melihat maklumat projek (baca sahaja). Superadmin tiada akses kepada maklumat projek. |
-| I.10 | **Laporan bulanan:** tarikh akhir setiap bulan (contoh hari ke-10 bulan berikutnya) atau ikut `meetings.progress_update_deadline` sedia ada? Laporan bulan terdahulu yang tertinggal boleh dihantar lewat? | Ikut `progress_update_deadline`. Laporan lewat dibenarkan dengan tanda "Lewat". |
+| I.10 | **Laporan bulanan:** tarikh akhir setiap bulan (contoh hari ke-10 bulan berikutnya) atau ikut `meetings.progress_update_deadline` sedia ada? Laporan bulan terdahulu yang tertinggal boleh dihantar lewat? | ✅ **Diputuskan 23/11/2026:** tarikh akhir ikut `meetings.progress_update_deadline` ("Tarikh Status Kemaskini Kemajuan Projek"). Laporan lewat dibenarkan dengan tanda "Lewat". Tafsiran pemetaan bulan → tarikh akhir: lihat L.7. |
 | I.11 | **Pegawai yang boleh mengemas kini:** Pegawai Utama sahaja, atau Utama dan Kedua? Pendaftar asal? | ✅ **Diputuskan 20/11/2026:** Pegawai Utama dan Pegawai Kedua yang **aktif** boleh mengemas kini kemajuan, termasuk pilihan Berfasa (L.3) |
 | I.12 | **Nama paparan Jenis Perolehan 4:** "Pembangunan Aplikasi / Sistem" (master) berbanding "Pembangunan Sistem / Aplikasi" (spesifikasi). Nama templat D? | ✅ **Diputuskan 20/11/2026:** "Pembangunan Sistem / Aplikasi" bagi Templat D **dan** Master Data (E.1) |
 | I.13 | **Bank Projek (v1):** cara data v1 diperoleh (eksport pangkalan data v1 / fail), padanan agensi, pegawai bertanggungjawab bagi projek v1 yang masih berjalan, dan kriteria projek "berjalan" berbanding "sejarah" | Diputuskan sebelum fasa Bank Projek. Tidak menyekat SP1–SP5. |
@@ -707,7 +707,9 @@ Bagi projek Tidak Berfasa, fasa tunggal mengandungi semua aktiviti templat (juml
 | I.2, I.7, I.12 | ✅ Diputuskan (20/11/2026) |
 | Tanda siap (L.1), projek berfasa (L.3), data v1 (L.4) | ✅ Diputuskan (20/11/2026) |
 | I.1, I.3, I.9, I.11 | ✅ Diputuskan (20/11/2026). Lihat L.6. |
-| I.4, I.5, I.6, I.8, I.10 | Terbuka. Diperlukan mengikut kebergantungan dalam Bahagian J (SP3–SP5). |
+| I.8, I.10 | ✅ Diputuskan (23/11/2026). Lihat L.7. |
+| I.5, I.6 | ✅ Diputuskan (23/11/2026). Lihat L.8. |
+| I.4 | Terbuka (kemajuan kewangan; ditangguhkan). |
 | I.13 | Terbuka. Diperlukan sebelum fasa Bank Projek. |
 
 ### L.6 Keputusan sebelum SP2 (20/11/2026)
@@ -718,6 +720,20 @@ Bagi projek Tidak Berfasa, fasa tunggal mengandungi semua aktiviti templat (juml
 | I.3 | Pemohon menetapkan tarikh mula dan tamat projek. Pindaan dibenarkan tanpa kelulusan Urus Setia, dengan **justifikasi wajib**. Setiap pindaan direkodkan dan **tidak menimpa** jadual terdahulu. | Penetapan pertama semasa Mulakan Pemantauan tidak memerlukan justifikasi. Pindaan selepas itu memerlukan justifikasi. Jadual sejarah baharu `project_schedule_changes` (append-only): tarikh lama dan baharu bagi projek atau aktiviti, justifikasi, pengguna dan masa. |
 | I.9 | **Pengurusan sahaja** boleh melihat maklumat projek (baca sahaja). | `ProjectPolicy::view`: pegawai agensi (sunting mengikut I.11), Urus Setia (pantau, baca sahaja), Pengurusan (baca sahaja). Superadmin ditolak. |
 | I.11 | Pegawai Utama dan Pegawai Kedua **aktif** boleh mengemas kini kemajuan. | `ProjectPolicy::update`: pegawai aktif dalam `application_officers` bagi permohonan projek. Rekod sejarah v1 (`HISTORICAL`) dan projek ditutup adalah baca sahaja. |
+
+### L.7 Keputusan sebelum SP3 (23/11/2026)
+
+| # | Keputusan | Kesan reka bentuk SP3 (cadangan) |
+|---|---|---|
+| I.8 | Dokumen sokongan kemajuan: **PDF sahaja, maksimum 25 MB**. Dokumen wajib mesti dimuat naik **sebelum** aktiviti ditanda siap. | Semakan jenis fail sebenar (bukan sambungan sahaja). Tanda siap bagi aktiviti `requires_document` ditolak jika tiada dokumen aktif bagi aktiviti itu. Aktiviti tanpa dokumen wajib (contoh Latihan/TOT) boleh ditanda siap tanpa dokumen. |
+| I.10 | Tarikh akhir laporan ikut **`meetings.progress_update_deadline`**. Laporan lewat dibenarkan dengan tanda **"Lewat"**. | **Dapatan:** `progress_update_deadline` disimpan **bagi setiap mesyuarat**, bukan setiap bulan. Cadangan tafsiran: tarikh akhir laporan bagi bulan M = `progress_update_deadline` mesyuarat aktif yang **pertama pada atau selepas hari terakhir bulan M**. Tarikh akhir disalin ke laporan semasa laporan dicipta. Jika tiada mesyuarat dengan tarikh tersebut, laporan tiada tarikh akhir dan tidak ditanda "Lewat". ✅ *Tafsiran disahkan pemilik 23/11/2026.* "Mesyuarat aktif" = mesyuarat yang tidak dipadam (status Aktif/Tidak Aktif tidak digunakan), disahkan 23/11/2026. |
+
+### L.8 Keputusan sebelum SP4 (23/11/2026)
+
+| # | Keputusan | Kesan reka bentuk SP4 (cadangan) |
+|---|---|---|
+| I.5 | Status utama: varians **Mendahului / Mengikut Jadual / Lewat**. Lampu RAG diterbitkan daripada varians: **Hijau** (varians ≥ 0), **Kuning** (−0.01 hingga −19.99), **Merah** (≤ −20). Tiada pengesahan prestasi oleh Urus Setia. | Satu service pengiraan tulen. `status_indicator` sedia ada diisi daripada varians; `Project::updateStatusIndicator()` lama digantikan. Projek tanpa tarikh sasaran (rekod sejarah v1): tiada varians, tiada lampu. |
+| I.6 | Pegawai projek **memohon penutupan**; **Urus Setia mengesahkan** (status Menunggu Pengesahan Penutupan → Selesai). Projek Penyelenggaraan selesai pada **tarikh tamat kontrak**. | Kriteria permohonan penutupan dan butiran "tarikh tamat kontrak" diperincikan dalam reka bentuk SP4 sebelum dilaksanakan. |
 
 ---
 

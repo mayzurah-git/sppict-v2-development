@@ -29,6 +29,8 @@ use App\Livewire\Users\RegistrationRequests;
 use App\Livewire\Projects\ProjectList;
 use App\Livewire\Projects\ProjectSetup;
 use App\Livewire\Projects\ShowProject;
+use App\Livewire\Projects\ProgressReportPage;
+use App\Http\Controllers\ProjectAttachmentController;
 
 Route::view('/', 'welcome');
 
@@ -79,6 +81,9 @@ Route::middleware(['auth', 'verified', 'active', 'password.changed'])->group(fun
         Route::get('/mula/{application}', ProjectSetup::class)->name('start');
         Route::get('/{uuid}', ShowProject::class)->name('show');
         Route::get('/{project}/struktur', ProjectSetup::class)->name('structure');
+        // SP3: laporan kemajuan bulanan & dokumen sokongan (storan private; ProjectPolicy@view)
+        Route::get('/{project}/laporan/{report}', ProgressReportPage::class)->name('reports.show');
+        Route::get('/{projectUuid}/dokumen/{attachmentUuid}', ProjectAttachmentController::class)->name('attachments.show');
     });
 
     Route::get('/admin/agencies', AgencyManagement::class)->middleware('role:pentadbir_urus_setia')->name('admin.agencies');

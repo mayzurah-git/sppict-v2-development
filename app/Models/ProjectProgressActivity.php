@@ -63,6 +63,18 @@ class ProjectProgressActivity extends Model implements Auditable
         return $this->belongsTo(ProgressTemplateActivity::class, 'progress_template_activity_id');
     }
 
+    /** SP3: dokumen sokongan aktiviti (aktif sahaja). */
+    public function attachments()
+    {
+        return $this->hasMany(ProjectProgressAttachment::class)->latest('id');
+    }
+
+    /** SP3: sejarah tanda siap / batal tanda, terkini dahulu. */
+    public function updates()
+    {
+        return $this->hasMany(ProjectProgressUpdate::class)->latest('id');
+    }
+
     /**
      * Status diterbitkan pada tarikh penilaian: Selesai / Lewat (belum siap dan tarikh sasaran telah berlalu) / Belum Siap.
      */

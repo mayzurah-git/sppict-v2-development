@@ -222,6 +222,18 @@ class Project extends Model implements Auditable
         return $this->hasMany(ProjectStructureUnlock::class)->latest('id');
     }
 
+    /** SP3: dokumen sokongan kemajuan projek. */
+    public function attachments()
+    {
+        return $this->hasMany(ProjectProgressAttachment::class);
+    }
+
+    /** SP3: sejarah tanda siap aktiviti, terkini dahulu. */
+    public function progressUpdates()
+    {
+        return $this->hasMany(ProjectProgressUpdate::class)->latest('id');
+    }
+
     public function starter()
     {
         return $this->belongsTo(User::class, 'started_by')->withTrashed();

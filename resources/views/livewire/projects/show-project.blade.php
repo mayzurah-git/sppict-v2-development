@@ -117,19 +117,38 @@
                             <th scope="col" class="p-3">Tarikh Sasaran</th>
                             <th scope="col" class="p-3">Tarikh Sebenar Siap</th>
                             <th scope="col" class="p-3">Status</th>
+                            @if ($canManage)<th scope="col" class="p-3"><span class="sr-only">Tindakan</span></th>@endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($phase->activities as $activity)
-                            @php($status = $activity->statusOn(today()))
+                            @php
+                                $status = $activity->statusOn(today());
+                                $documents = $this->activityAttachments->get($activity->id, collect());
+                            @endphp
                             <tr wire:key="aktiviti-{{ $activity->id }}">
                                 <td class="p-3 tabular-nums text-slate-500">{{ $activity->sequence }}</td>
                                 <td class="p-3 font-semibold text-slate-800">{{ $activity->name }}</td>
                                 <td class="p-3 text-right tabular-nums">{{ number_format((float) $activity->weight, 2) }}</td>
-                                <td class="p-3 text-slate-600">{{ $activity->requires_document ? ($activity->document_label ?? 'Ya') : '-' }}</td>
+                                <td class="p-3 text-slate-600">
+                                    {{ $activity->requires_document ? ($activity->document_label ?? 'Ya') : '-' }}
+                                    @foreach ($documents as $document)
+                                        <a href="{{ route('projects.attachments.show', [$project->uuid, $document->uuid]) }}" target="_blank" rel="noopener" class="block mt-0.5 text-[11px] font-semibold text-sky-800 hover:underline break-all">📄 {{ $document->file_name }}</a>
+                                    @endforeach
+                                    @if ($activity->requires_document && $documents->isEmpty())
+                                        <span class="block mt-0.5 text-[11px] text-amber-700">Belum dimuat naik</span>
+                                    @endif
+                                </td>
                                 <td class="p-3 tabular-nums">{{ $activity->target_date?->format('d/m/Y') ?? '-' }}</td>
                                 <td class="p-3 tabular-nums">{{ $activity->actual_completion_date?->format('d/m/Y') ?? '-' }}</td>
                                 <td class="p-3"><span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold ring-1 {{ $status->badgeClasses() }}">{{ $status->label() }}</span></td>
+                                @if ($canManage)
+                                    <td class="p-3 text-right whitespace-nowrap">
+                                        <button type="button" wire:click="openActivityModal('{{ $activity->uuid }}')" class="px-2.5 py-1 text-[11px] font-bold rounded-lg transition {{ $activity->is_completed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-sky-700 text-white hover:bg-sky-800' }}">
+                                            {{ $activity->is_completed ? 'Kemas Kini' : 'Tanda Siap' }}
+                                        </button>
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -137,6 +156,88 @@
             </div>
         </section>
     @endforeach
+
+    {{-- SP3: Laporan kemajuan bulanan --}}
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-end justify-between gap-3">
+            <div>
+                <h3 class="text-sm font-bold text-slate-800">Laporan Kemajuan Bulanan</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Satu laporan bagi setiap bulan. Tarikh akhir mengikut Tarikh Status Kemaskini Kemajuan Projek mesyuarat. Laporan lewat masih diterima dan ditanda "Lewat".</p>
+            </div>
+            @if ($canManage && count($this->availablePeriods) > 0)
+                <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
+                    <div>
+                        <label for="bulan-laporan" class="sr-only">Bulan laporan</label>
+                        <select id="bulan-laporan" wire:model="reportPeriod" class="text-xs border-slate-200 rounded-lg shadow-sm focus:border-sky-700 focus:ring-sky-700/20">
+                            <option value="">-- Pilih bulan --</option>
+                            @foreach ($this->availablePeriods as [$year, $month])
+                                <option value="{{ $year }}-{{ $month }}">{{ \App\Models\ProjectProgressReport::MONTHS[$month] }} {{ $year }}</option>
+                            @endforeach
+                        </select>
+                        @error('period') <span class="text-red-600 text-xs block mt-1">{{ $message }}</span> @enderror
+                    </div>
+                    <button type="button" wire:click="createReport" wire:loading.attr="disabled" wire:target="createReport" class="px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-lg transition disabled:opacity-50">Cipta Laporan</button>
+                </div>
+            @endif
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px] text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">
+                    <tr>
+                        <th scope="col" class="p-3">Bulan</th>
+                        <th scope="col" class="p-3">Status</th>
+                        <th scope="col" class="p-3">Tarikh Akhir</th>
+                        <th scope="col" class="p-3">Dihantar</th>
+                        <th scope="col" class="p-3"><span class="sr-only">Tindakan</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @forelse ($this->reports as $report)
+                        <tr wire:key="laporan-{{ $report->id }}">
+                            <td class="p-3 font-semibold text-slate-800">{{ $report->periodLabel() }}</td>
+                            <td class="p-3">
+                                <span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold {{ $report->isSubmitted() ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700' }}">{{ $report->status->label() }}</span>
+                                @if ($report->is_late)
+                                    <span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold bg-red-50 text-red-800 ring-1 ring-red-200">Lewat</span>
+                                @endif
+                            </td>
+                            <td class="p-3 tabular-nums">{{ $report->due_date?->format('d/m/Y') ?? 'Belum ditetapkan' }}</td>
+                            <td class="p-3 tabular-nums">{{ $report->submitted_at ? $report->submitted_at->format('d/m/Y') . ' · ' . ($report->submitter?->name ?? '-') : '-' }}</td>
+                            <td class="p-3 text-right">
+                                <a href="{{ route('projects.reports.show', [$project->uuid, $report->uuid]) }}" class="text-[13px] font-bold text-sky-800 hover:underline">{{ $canManage && ! $report->isSubmitted() ? 'Kemas Kini' : 'Papar' }}</a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="p-6 text-center text-sm text-slate-500">Tiada laporan kemajuan bulanan.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {{-- SP3: Sejarah kemas kini aktiviti --}}
+    @if ($this->progressHistory->isNotEmpty())
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+            <h3 class="text-sm font-bold text-slate-800">Sejarah Kemas Kini Aktiviti</h3>
+            <ul class="space-y-2">
+                @foreach ($this->progressHistory as $update)
+                    <li wire:key="kemaskini-{{ $update->id }}" class="p-3 rounded-xl border border-slate-100 bg-slate-50 text-xs">
+                        <p class="text-slate-500">{{ $update->created_at?->format('d/m/Y h:i A') }} · {{ $update->updater?->name ?? '-' }}</p>
+                        <p class="text-slate-800 mt-0.5">
+                            <span class="font-bold {{ $update->change_type === \App\Enums\ProgressUpdateType::Completed ? 'text-emerald-800' : 'text-red-800' }}">{{ $update->change_type->label() }}:</span>
+                            {{ $update->activity?->name ?? '-' }}{{ $project->is_phased && $update->activity?->phase ? ' (Fasa ' . $update->activity->phase->phase_number . ')' : '' }}
+                            @if ($update->completion_date)
+                                · tarikh siap <span class="tabular-nums">{{ $update->completion_date->format('d/m/Y') }}</span>
+                            @endif
+                        </p>
+                        @if ($update->remarks)
+                            <p class="text-slate-600 mt-0.5 whitespace-pre-line">{{ $update->remarks }}</p>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
 
     {{-- Sejarah pindaan jadual --}}
     <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
@@ -217,6 +318,93 @@
                 <div class="flex justify-end gap-2 pt-2 border-t">
                     <button type="button" wire:click="closeModals" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">Batal</button>
                     <button type="button" wire:click="saveSchedule" wire:loading.attr="disabled" wire:target="saveSchedule" class="px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50">Simpan Pindaan</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- SP3 Modal: Kemas Kini Aktiviti --}}
+    @if ($showActivityModal && ($selected = $this->selectedActivity))
+        @php($selectedDocuments = $this->activityAttachments->get($selected->id, collect()))
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="tajuk-aktiviti">
+                <div class="border-b pb-2">
+                    <h3 id="tajuk-aktiviti" class="text-base font-bold text-slate-800">{{ $selected->name }}</h3>
+                    <p class="text-[11px] text-slate-500">
+                        {{ $project->is_phased ? 'Fasa ' . $selected->phase?->phase_number . ' · ' : '' }}Pemberat {{ number_format((float) $selected->weight, 2) }}% · Tarikh sasaran {{ $selected->target_date?->format('d/m/Y') ?? '-' }}
+                    </p>
+                </div>
+
+                @error('activity') <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl">{{ $message }}</div> @enderror
+                @if (session()->has('modal_message'))
+                    <div class="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold rounded-xl">{{ session('modal_message') }}</div>
+                @endif
+
+                {{-- Dokumen sokongan --}}
+                <div class="space-y-2">
+                    <p class="text-xs font-bold text-slate-700">
+                        Dokumen Sokongan
+                        @if ($selected->requires_document)
+                            <span class="font-normal text-slate-500">· wajib: {{ $selected->document_label ?? 'Dokumen sokongan' }}</span>
+                        @else
+                            <span class="font-normal text-slate-500">· tidak wajib</span>
+                        @endif
+                    </p>
+                    @forelse ($selectedDocuments as $document)
+                        <div wire:key="dok-{{ $document->id }}" class="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                            <a href="{{ route('projects.attachments.show', [$project->uuid, $document->uuid]) }}" target="_blank" rel="noopener" class="font-semibold text-sky-800 hover:underline break-all">📄 {{ $document->file_name }}</a>
+                            <span class="shrink-0 text-[11px] text-slate-500">{{ $document->created_at?->format('d/m/Y') }}</span>
+                            <button type="button" wire:click="deleteDocument('{{ $document->uuid }}')" wire:confirm="Padam dokumen ini?" class="shrink-0 text-[11px] font-bold text-red-700 hover:underline">Padam</button>
+                        </div>
+                    @empty
+                        <p class="text-xs text-slate-500">Tiada dokumen dimuat naik.</p>
+                    @endforelse
+                    @error('attachment') <span class="text-red-600 text-xs block">{{ $message }}</span> @enderror
+
+                    <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <label for="muat-naik-dokumen" class="sr-only">Pilih dokumen PDF</label>
+                        <input id="muat-naik-dokumen" type="file" wire:model="upload" accept="application/pdf,.pdf" class="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-xs file:font-bold">
+                        <button type="button" wire:click="uploadActivityDocument" wire:loading.attr="disabled" wire:target="upload,uploadActivityDocument" class="shrink-0 px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition disabled:opacity-50">Muat Naik</button>
+                    </div>
+                    <p class="text-[11px] text-slate-500">PDF sahaja, maksimum 25 MB.</p>
+                    @error('upload') <span class="text-red-600 text-xs block">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="border-t pt-4 space-y-3">
+                    @if ($selected->is_completed)
+                        <p class="text-xs text-slate-700">Aktiviti ini telah ditanda <span class="font-bold text-emerald-800">Siap</span> pada <span class="font-bold tabular-nums">{{ $selected->actual_completion_date?->format('d/m/Y') }}</span>. Untuk membetulkan tarikh, batalkan tanda siap dan tanda semula.</p>
+                        <div>
+                            <label for="catatan-aktiviti" class="block text-xs font-bold text-slate-700">Catatan Pembatalan <span class="text-red-600">*</span></label>
+                            <textarea id="catatan-aktiviti" wire:model="activityRemarks" rows="2" maxlength="2000" class="mt-1 {{ $inputClass }}" placeholder="Contoh: Tarikh siap tersilap; dokumen SST belum ditandatangani."></textarea>
+                            @error('remarks') <span class="text-red-600 text-xs block mt-1">{{ $message }}</span> @enderror
+                        </div>
+                    @else
+                        @error('document') <div class="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold rounded-xl">{{ $message }}</div> @enderror
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="tarikh-siap" class="block text-xs font-bold text-slate-700">Tarikh Sebenar Siap <span class="text-red-600">*</span></label>
+                                <input id="tarikh-siap" type="date" wire:model="completionDate" max="{{ today()->toDateString() }}" class="mt-1 {{ $inputClass }}">
+                                @error('completionDate') <span class="text-red-600 text-xs block mt-1">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+                        <div>
+                            <label for="catatan-siap" class="block text-xs font-bold text-slate-700">Catatan (pilihan)</label>
+                            <textarea id="catatan-siap" wire:model="activityRemarks" rows="2" maxlength="2000" class="mt-1 {{ $inputClass }}"></textarea>
+                            @error('remarks') <span class="text-red-600 text-xs block mt-1">{{ $message }}</span> @enderror
+                        </div>
+                        @if (! $project->isStructureLocked())
+                            <p class="text-[11px] text-slate-500">Selepas aktiviti pertama ditanda siap, struktur fasa dan aktiviti akan dikunci.</p>
+                        @endif
+                    @endif
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" wire:click="closeModals" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">Tutup</button>
+                    @if ($selected->is_completed)
+                        <button type="button" wire:click="uncompleteActivity" wire:loading.attr="disabled" wire:target="uncompleteActivity" class="px-4 py-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50">Batal Tanda Siap</button>
+                    @else
+                        <button type="button" wire:click="completeActivity" wire:loading.attr="disabled" wire:target="completeActivity" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50">Tanda Siap</button>
+                    @endif
                 </div>
             </div>
         </div>
